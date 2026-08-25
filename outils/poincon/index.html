@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Poinçon — QR codes</title>
+<meta name="description" content="Frapper des QR codes présentables : Wi-Fi, contact, lien, e-mail. Logo au centre, dégradés, formes de modules, export PNG haute définition et SVG.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="stylesheet" href="../../atelier/atelier.css">
+<style>
+  .plateau{
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    gap:22px;padding-top:14px;
+  }
+  .cadre{
+    background:var(--papier);border-radius:4px;padding:26px;
+    box-shadow:0 1px 2px rgba(0,0,0,.35),0 22px 48px rgba(0,0,0,.45);
+    display:grid;place-items:center;position:relative;
+  }
+  .cadre.damier{
+    background:
+      repeating-conic-gradient(#e9e9e9 0% 25%, #fdfdfb 0% 50%) 50%/16px 16px;
+  }
+  .cadre canvas,.cadre svg{display:block;max-width:100%;height:auto}
+  #rendu{line-height:0}
+
+  .legende{
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--craie-3);
+    text-align:center;max-width:46ch;line-height:1.6;
+  }
+  .legende b{color:var(--reglet);font-weight:500}
+
+  .sortie{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+
+  .palettes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .pal{
+    border:1px solid var(--trait);border-radius:var(--r);padding:7px 6px 6px;
+    cursor:pointer;background:transparent;display:flex;flex-direction:column;gap:6px;
+    align-items:center;transition:border-color .15s,background .15s;
+  }
+  .pal:hover{border-color:var(--craie-3)}
+  .pal.on{border-color:var(--reglet);background:rgba(242,183,5,.09)}
+  .pal .puce{width:100%;height:22px;border-radius:2px;border:1px solid rgba(0,0,0,.25)}
+  .pal .nm{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--craie-3)}
+  .pal.on .nm{color:var(--craie)}
+
+  .duo{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .logo-etat{
+    display:flex;align-items:center;gap:10px;border:1px solid var(--trait);
+    border-radius:var(--r);padding:8px 10px;background:var(--tapis-3);
+  }
+  .logo-etat img{width:32px;height:32px;object-fit:contain;background:#fff;border-radius:2px;flex:none}
+  .logo-etat .nm{font-size:12px;color:var(--craie-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
+  .alerte{
+    border:1px solid rgba(229,88,77,.4);background:rgba(229,88,77,.09);
+    border-radius:var(--r);padding:10px 12px;font-size:12px;color:#F3AEA8;line-height:1.5;
+  }
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <rect x="4" y="4" width="13" height="13" rx="2" fill="#F2B705"/>
+      <rect x="8" y="8" width="5" height="5" rx="1" fill="#16302A"/>
+      <rect x="23" y="4" width="13" height="13" rx="2" fill="#FFD34D"/>
+      <rect x="27" y="8" width="5" height="5" rx="1" fill="#16302A"/>
+      <rect x="4" y="23" width="13" height="13" rx="2" fill="#FFD34D"/>
+      <rect x="8" y="27" width="5" height="5" rx="1" fill="#16302A"/>
+      <rect x="23" y="23" width="6" height="6" rx="1.4" fill="#5FD3B8"/>
+      <rect x="31" y="23" width="5" height="5" rx="1.2" fill="#5FD3B8" opacity=".55"/>
+      <rect x="23" y="31" width="13" height="5" rx="1.4" fill="#5FD3B8" opacity=".55"/>
+    </svg>
+    <div>
+      <h1>Poinçon</h1>
+      <p>QR codes — Wi-Fi, contact, lien</p>
+    </div>
+  </a>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">—</div>
+  <button class="btn btn-go" id="btnPng">Télécharger le PNG</button>
+</header>
+
+<!-- « reglages-dabord » : sur téléphone, le panneau passe avant l'aperçu —
+     c'est là qu'on saisit le contenu du code. -->
+<div class="shell large reglages-dabord">
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <aside class="panel">
+
+    <details class="grp" open>
+      <summary>Contenu</summary>
+      <div class="grp-body">
+
+        <div class="field">
+          <label>Type de code</label>
+          <div class="seg col" id="segType">
+            <button data-v="lien" class="on">Lien / site web</button>
+            <button data-v="texte">Texte libre</button>
+            <button data-v="wifi">Réseau Wi-Fi</button>
+            <button data-v="contact">Contact (vCard)</button>
+            <button data-v="mail">E-mail</button>
+            <button data-v="sms">SMS</button>
+            <button data-v="tel">Téléphone</button>
+          </div>
+        </div>
+
+        <!-- Lien -->
+        <div class="field" data-pour="lien">
+          <label for="fLien">Adresse</label>
+          <input type="text" id="fLien" value="https://" spellcheck="false" inputmode="url">
+          <p class="hint">Le préfixe <b>https://</b> est ajouté tout seul si vous l'oubliez.</p>
+        </div>
+
+        <!-- Texte -->
+        <div class="field" data-pour="texte" hidden>
+          <label for="fTexte">Texte à encoder</label>
+          <textarea id="fTexte" rows="4" placeholder="Ce que le téléphone affichera après le scan…"></textarea>
+        </div>
+
+        <!-- Wi-Fi -->
+        <div data-pour="wifi" hidden style="display:flex;flex-direction:column;gap:16px">
+          <div class="field">
+            <label for="fSsid">Nom du réseau (SSID)</label>
+            <input type="text" id="fSsid" placeholder="Livebox-A4C2" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="fPass">Mot de passe</label>
+            <input type="text" id="fPass" spellcheck="false" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Sécurité</label>
+            <div class="seg" id="segWifi">
+              <button data-v="WPA" class="on">WPA / WPA2</button>
+              <button data-v="WEP">WEP</button>
+              <button data-v="nopass">Ouvert</button>
+            </div>
+          </div>
+          <label class="chk"><input type="checkbox" id="fCache"><span>Réseau masqué (SSID non diffusé)</span></label>
+          <p class="hint">Le téléphone se connecte d'un scan, sans taper le mot de passe.</p>
+        </div>
+
+        <!-- Contact -->
+        <div data-pour="contact" hidden style="display:flex;flex-direction:column;gap:16px">
+          <div class="duo">
+            <div class="field">
+              <label for="fPrenom">Prénom</label>
+              <input type="text" id="fPrenom">
+            </div>
+            <div class="field">
+              <label for="fNom">Nom</label>
+              <input type="text" id="fNom">
+            </div>
+          </div>
+          <div class="field">
+            <label for="fOrg">Organisation</label>
+            <input type="text" id="fOrg">
+          </div>
+          <div class="field">
+            <label for="fPoste">Fonction</label>
+            <input type="text" id="fPoste">
+          </div>
+          <div class="field">
+            <label for="fTelC">Téléphone</label>
+            <input type="text" id="fTelC" inputmode="tel" placeholder="+221 …">
+          </div>
+          <div class="field">
+            <label for="fMailC">E-mail</label>
+            <input type="text" id="fMailC" inputmode="email" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="fSite">Site web</label>
+            <input type="text" id="fSite" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="fAdr">Adresse</label>
+            <input type="text" id="fAdr">
+          </div>
+        </div>
+
+        <!-- E-mail -->
+        <div data-pour="mail" hidden style="display:flex;flex-direction:column;gap:16px">
+          <div class="field">
+            <label for="fMailDest">Destinataire</label>
+            <input type="text" id="fMailDest" inputmode="email" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="fMailObj">Objet</label>
+            <input type="text" id="fMailObj">
+          </div>
+          <div class="field">
+            <label for="fMailCorps">Message pré-rempli</label>
+            <textarea id="fMailCorps" rows="3"></textarea>
+          </div>
+        </div>
+
+        <!-- SMS -->
+        <div data-pour="sms" hidden style="display:flex;flex-direction:column;gap:16px">
+          <div class="field">
+            <label for="fSmsNum">Numéro</label>
+            <input type="text" id="fSmsNum" inputmode="tel" placeholder="+221 …">
+          </div>
+          <div class="field">
+            <label for="fSmsTxt">Message pré-rempli</label>
+            <textarea id="fSmsTxt" rows="3"></textarea>
+          </div>
+        </div>
+
+        <!-- Téléphone -->
+        <div class="field" data-pour="tel" hidden>
+          <label for="fTel">Numéro à appeler</label>
+          <input type="text" id="fTel" inputmode="tel" placeholder="+221 …">
+        </div>
+
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary>Allure</summary>
+      <div class="grp-body">
+
+        <div class="field">
+          <label>Modèle</label>
+          <div class="palettes" id="palettes"></div>
+        </div>
+
+        <div class="field">
+          <label>Forme des modules</label>
+          <div class="seg" id="segPoints">
+            <button data-v="square">Carré</button>
+            <button data-v="rounded" class="on">Arrondi</button>
+            <button data-v="dots">Pastille</button>
+          </div>
+          <div class="seg" id="segPoints2" style="margin-top:6px">
+            <button data-v="classy">Élégant</button>
+            <button data-v="classy-rounded">Élégant doux</button>
+            <button data-v="extra-rounded">Très arrondi</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Coins — cadre</label>
+          <div class="seg" id="segCoin">
+            <button data-v="square">Carré</button>
+            <button data-v="extra-rounded" class="on">Arrondi</button>
+            <button data-v="dot">Rond</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Coins — pupille</label>
+          <div class="seg" id="segPupille">
+            <button data-v="square">Carré</button>
+            <button data-v="dot" class="on">Rond</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Couleur des modules</label>
+          <div class="seg" id="segTeinte">
+            <button data-v="uni" class="on">Unie</button>
+            <button data-v="degrade">Dégradé</button>
+          </div>
+        </div>
+
+        <div class="duo">
+          <div class="field">
+            <label for="cA">Couleur</label>
+            <input type="color" id="cA" value="#12241F">
+          </div>
+          <div class="field" id="champB">
+            <label for="cB">Vers</label>
+            <input type="color" id="cB" value="#16302A">
+          </div>
+        </div>
+
+        <div class="field" id="champRot">
+          <label for="fRot">Sens du dégradé <span id="rotV">45°</span></label>
+          <input type="range" id="fRot" min="0" max="360" step="15" value="45">
+        </div>
+
+        <div class="field">
+          <label for="cFond">Arrière-plan</label>
+          <input type="color" id="cFond" value="#FFFFFF">
+          <label class="chk" style="margin-top:4px"><input type="checkbox" id="fTransp"><span>Fond transparent (PNG détouré)</span></label>
+        </div>
+
+        <div class="field">
+          <label for="fMarge">Marge blanche <span id="margeV">4 modules</span></label>
+          <input type="range" id="fMarge" min="0" max="10" step="1" value="4">
+          <p class="hint">En dessous de 2, certains lecteurs peinent à cadrer le code.</p>
+        </div>
+
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Logo au centre</summary>
+      <div class="grp-body">
+        <div id="logoVide">
+          <button class="btn" id="btnLogo" style="width:100%">Choisir une image</button>
+          <p class="hint" style="margin-top:9px">
+            PNG à fond transparent de préférence. La correction d'erreur passe
+            automatiquement au maximum pour que le code reste lisible.
+          </p>
+        </div>
+        <div class="logo-etat" id="logoPlein" hidden>
+          <img id="logoApercu" alt="">
+          <span class="nm" id="logoNom"></span>
+          <button class="btn btn-mini" id="btnLogoOff">Retirer</button>
+        </div>
+        <div class="field" id="logoReglages" hidden>
+          <label for="fLogoT">Taille du logo <span id="logoTV">28 %</span></label>
+          <input type="range" id="fLogoT" min="10" max="45" step="1" value="28">
+        </div>
+        <div class="field" id="logoReglages2" hidden>
+          <label for="fLogoM">Dégagement autour <span id="logoMV">6 px</span></label>
+          <input type="range" id="fLogoM" min="0" max="24" step="1" value="6">
+        </div>
+        <label class="chk" id="logoTrou" hidden><input type="checkbox" id="fLogoTrou" checked><span>Effacer les modules sous le logo</span></label>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Fabrication</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="fTaille">Taille du PNG</label>
+          <select id="fTaille">
+            <option value="512">512 px — réseaux sociaux</option>
+            <option value="1024" selected>1024 px — écran &amp; web</option>
+            <option value="2048">2048 px — affiche, impression</option>
+            <option value="4096">4096 px — grand format</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="fCorrection">Correction d'erreur</label>
+          <select id="fCorrection">
+            <option value="L">L — 7 % (code plus léger)</option>
+            <option value="M" selected>M — 15 % (équilibré)</option>
+            <option value="Q">Q — 25 %</option>
+            <option value="H">H — 30 % (indispensable avec un logo)</option>
+          </select>
+          <p class="hint">Plus la correction est haute, plus le code supporte
+            un logo, une impression abîmée ou un scan de travers.</p>
+        </div>
+        <div class="field">
+          <label for="fNomFic">Nom du fichier</label>
+          <input type="text" id="fNomFic" value="qr-code">
+        </div>
+      </div>
+    </details>
+
+  </aside>
+
+  <!-- ======================= PLATEAU ======================= -->
+  <main class="mat">
+    <div class="plateau">
+
+      <div class="alerte" id="alerte" hidden></div>
+
+      <div class="cadre" id="cadre">
+        <div id="rendu"></div>
+      </div>
+
+      <p class="legende" id="legende">…</p>
+
+      <div class="sortie">
+        <button class="btn btn-go" id="btnPng2">PNG</button>
+        <button class="btn" id="btnSvg">SVG (vectoriel)</button>
+        <button class="btn" id="btnJpg">JPEG</button>
+        <button class="btn" id="btnCopier">Copier l'image</button>
+      </div>
+
+      <p class="legende">
+        Le SVG reste net à n'importe quelle taille : c'est le format à donner
+        à un imprimeur ou à poser dans une affiche.
+      </p>
+
+    </div>
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Poinçon</b> — L'Atelier</span>
+  <span>Le contenu du code ne quitte pas cet onglet</span>
+  <span id="piedInfo"></span>
+</footer>
+
+<script src="https://unpkg.com/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"></script>
+<script>
+  // Miroir de secours si unpkg est injoignable.
+  if (!window.QRCodeStyling) {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"><\/script>');
+  }
+</script>
+<script type="module">
+import { $, dire, bravo, rater, telecharger, segment, curseur, nomPropre } from '../../atelier/ui.js';
+
+if (!window.QRCodeStyling) {
+  $('#alerte').hidden = false;
+  $('#alerte').textContent =
+    "La bibliothèque de rendu n'a pas pu être chargée. Vérifiez votre connexion, puis rechargez la page.";
+}
+
+/* ------------------------------------------------------------------ */
+/* Modèles                                                             */
+/* ------------------------------------------------------------------ */
+const MODELES = [
+  { cle:'encre',  nom:'Encre',  a:'#12241F', b:'#12241F', fond:'#FFFFFF', points:'rounded',        coin:'extra-rounded', pupille:'dot' },
+  { cle:'reglet', nom:'Réglet', a:'#F2B705', b:'#FFD34D', fond:'#16302A', points:'classy-rounded', coin:'extra-rounded', pupille:'dot' },
+  { cle:'lagune', nom:'Lagune', a:'#0E7C86', b:'#5FD3B8', fond:'#FFFFFF', points:'dots',           coin:'dot',           pupille:'dot' },
+  { cle:'braise', nom:'Braise', a:'#C2410C', b:'#F2B705', fond:'#FFF8EC', points:'classy',         coin:'extra-rounded', pupille:'square' },
+  { cle:'nuit',   nom:'Nuit',   a:'#FFFFFF', b:'#B4CCC1', fond:'#0B1A17', points:'dots',           coin:'extra-rounded', pupille:'dot' },
+  { cle:'indigo', nom:'Indigo', a:'#312E81', b:'#7C3AED', fond:'#FFFFFF', points:'extra-rounded',  coin:'extra-rounded', pupille:'dot' },
+];
+
+$('#palettes').innerHTML = MODELES.map((m) => {
+  const fond = m.a === m.b
+    ? m.a
+    : `linear-gradient(135deg,${m.a},${m.b})`;
+  return `<button class="pal" data-m="${m.cle}" type="button">
+      <span class="puce" style="background:${fond};box-shadow:inset 0 0 0 3px ${m.fond}"></span>
+      <span class="nm">${m.nom}</span>
+    </button>`;
+}).join('');
+
+/* ------------------------------------------------------------------ */
+/* Encodage du contenu                                                 */
+/* ------------------------------------------------------------------ */
+const val = (id) => ($('#' + id)?.value || '').trim();
+
+/** Échappe les caractères réservés de la syntaxe WIFI:. */
+const echapWifi = (s) => String(s).replace(/([\\;,:"])/g, '\\$1');
+
+/** Une ligne vCard : on saute le champ s'il est vide. */
+const ligne = (cle, v) => (v ? `${cle}:${v}\n` : '');
+
+function contenu(type) {
+  switch (type) {
+    case 'lien': {
+      let u = val('fLien');
+      if (!u || u === 'https://') return '';
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+      return u;
+    }
+
+    case 'texte':
+      return val('fTexte');
+
+    case 'wifi': {
+      const ssid = val('fSsid');
+      if (!ssid) return '';
+      const secu = segWifi.valeur;
+      const mdp = secu === 'nopass' ? '' : val('fPass');
+      return `WIFI:T:${secu};S:${echapWifi(ssid)};` +
+             (mdp ? `P:${echapWifi(mdp)};` : '') +
+             ($('#fCache').checked ? 'H:true;' : '') + ';';
+    }
+
+    case 'contact': {
+      const prenom = val('fPrenom'), nom = val('fNom');
+      if (!prenom && !nom && !val('fTelC') && !val('fMailC')) return '';
+      const complet = [prenom, nom].filter(Boolean).join(' ');
+      return 'BEGIN:VCARD\nVERSION:3.0\n' +
+        `N:${nom};${prenom};;;\n` +
+        ligne('FN', complet) +
+        ligne('ORG', val('fOrg')) +
+        ligne('TITLE', val('fPoste')) +
+        (val('fTelC') ? `TEL;TYPE=CELL:${val('fTelC')}\n` : '') +
+        (val('fMailC') ? `EMAIL;TYPE=INTERNET:${val('fMailC')}\n` : '') +
+        ligne('URL', val('fSite')) +
+        (val('fAdr') ? `ADR;TYPE=WORK:;;${val('fAdr')};;;;\n` : '') +
+        'END:VCARD';
+    }
+
+    case 'mail': {
+      const dest = val('fMailDest');
+      if (!dest) return '';
+      const p = new URLSearchParams();
+      if (val('fMailObj')) p.set('subject', val('fMailObj'));
+      if (val('fMailCorps')) p.set('body', val('fMailCorps'));
+      const q = p.toString();
+      return 'mailto:' + dest + (q ? '?' + q : '');
+    }
+
+    case 'sms': {
+      const num = val('fSmsNum').replace(/\s+/g, '');
+      if (!num) return '';
+      const txt = val('fSmsTxt');
+      return 'SMSTO:' + num + (txt ? ':' + txt : '');
+    }
+
+    case 'tel': {
+      const num = val('fTel').replace(/\s+/g, '');
+      return num ? 'tel:' + num : '';
+    }
+  }
+  return '';
+}
+
+const NOM_DEFAUT = {
+  lien: 'qr-lien', texte: 'qr-texte', wifi: 'qr-wifi',
+  contact: 'qr-contact', mail: 'qr-email', sms: 'qr-sms', tel: 'qr-telephone',
+};
+
+/* ------------------------------------------------------------------ */
+/* État de l'interface                                                 */
+/* ------------------------------------------------------------------ */
+let logoData = null;
+let logoNomFic = '';
+let nomTouche = false;   // l'utilisateur a-t-il renommé le fichier lui-même ?
+
+const segType = segment($('#segType'), (v) => {
+  document.querySelectorAll('[data-pour]').forEach((el) => {
+    el.hidden = el.dataset.pour !== v;
+  });
+  if (!nomTouche) $('#fNomFic').value = NOM_DEFAUT[v] || 'qr-code';
+  peindre();
+});
+const segWifi    = segment($('#segWifi'), peindre);
+const segCoin    = segment($('#segCoin'), peindre);
+const segPupille = segment($('#segPupille'), peindre);
+const segTeinte  = segment($('#segTeinte'), () => { majTeinte(); peindre(); });
+
+/* Les deux rangées de formes de modules ne font qu'un seul choix. */
+let formePoints = 'rounded';
+[$('#segPoints'), $('#segPoints2')].forEach((groupe) => {
+  groupe.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-v]');
+    if (!b) return;
+    formePoints = b.dataset.v;
+    majFormePoints();
+    peindre();
+  });
+});
+function majFormePoints() {
+  [...$('#segPoints').children, ...$('#segPoints2').children]
+    .forEach((b) => b.classList.toggle('on', b.dataset.v === formePoints));
+}
+
+curseur($('#fMarge'), $('#margeV'), (v) => `${v} module${v > 1 ? 's' : ''}`);
+curseur($('#fRot'),   $('#rotV'),   (v) => `${v}°`);
+curseur($('#fLogoT'), $('#logoTV'), (v) => `${v} %`);
+curseur($('#fLogoM'), $('#logoMV'), (v) => `${v} px`);
+
+function majTeinte() {
+  const degrade = segTeinte.valeur === 'degrade';
+  $('#champB').hidden = !degrade;
+  $('#champRot').hidden = !degrade;
+}
+majTeinte();
+
+$('#fTransp').addEventListener('change', () => {
+  $('#cFond').disabled = $('#fTransp').checked;
+  peindre();
+});
+
+$('#fNomFic').addEventListener('input', () => { nomTouche = true; });
+
+/* Tout changement de champ redessine. */
+document.querySelector('.panel').addEventListener('input', (e) => {
+  if (e.target.id === 'fNomFic') return;
+  peindre();
+});
+
+/* Modèles */
+$('#palettes').addEventListener('click', (e) => {
+  const b = e.target.closest('.pal');
+  if (!b) return;
+  const m = MODELES.find((x) => x.cle === b.dataset.m);
+  if (!m) return;
+
+  document.querySelectorAll('.pal').forEach((p) => p.classList.toggle('on', p === b));
+
+  $('#cA').value = m.a;
+  $('#cB').value = m.b;
+  $('#cFond').value = m.fond;
+  $('#fTransp').checked = false;
+  $('#cFond').disabled = false;
+  segTeinte.valeur = m.a === m.b ? 'uni' : 'degrade';
+  formePoints = m.points;
+  segCoin.valeur = m.coin;
+  segPupille.valeur = m.pupille;
+
+  majFormePoints();
+  majTeinte();
+  peindre();
+});
+
+/* Logo */
+const champLogo = document.createElement('input');
+champLogo.type = 'file';
+champLogo.accept = 'image/*';
+champLogo.hidden = true;
+document.body.appendChild(champLogo);
+
+$('#btnLogo').addEventListener('click', () => champLogo.click());
+champLogo.addEventListener('change', () => {
+  const f = champLogo.files?.[0];
+  champLogo.value = '';
+  if (!f) return;
+  if (f.size > 4 * 1024 * 1024) { rater('Logo trop lourd — restez sous 4 Mo.'); return; }
+
+  const lecteur = new FileReader();
+  lecteur.onload = () => {
+    logoData = lecteur.result;
+    logoNomFic = f.name;
+    $('#logoApercu').src = logoData;
+    $('#logoNom').textContent = f.name;
+    basculeLogo(true);
+    $('#fCorrection').value = 'H';       // un logo mange des modules
+    peindre();
+  };
+  lecteur.onerror = () => rater("Cette image n'a pas pu être lue.");
+  lecteur.readAsDataURL(f);
+});
+
+$('#btnLogoOff').addEventListener('click', () => {
+  logoData = null; logoNomFic = '';
+  basculeLogo(false);
+  peindre();
+});
+
+function basculeLogo(actif) {
+  $('#logoVide').hidden = actif;
+  $('#logoPlein').hidden = !actif;
+  $('#logoReglages').hidden = !actif;
+  $('#logoReglages2').hidden = !actif;
+  $('#logoTrou').hidden = !actif;
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendu                                                               */
+/* ------------------------------------------------------------------ */
+const TAILLE_APERCU = 340;
+let qr = null;
+let dernierTexte = '';
+
+/** Construit le bloc d'options passé à la bibliothèque. */
+function options(taille, type = 'canvas') {
+  const uni = segTeinte.valeur === 'uni';
+  const a = $('#cA').value;
+  const b = $('#cB').value;
+  const rotation = (+$('#fRot').value) * Math.PI / 180;
+
+  const teinte = uni
+    ? { color: a }
+    : { gradient: { type: 'linear', rotation, colorStops: [
+        { offset: 0, color: a }, { offset: 1, color: b },
+      ] } };
+
+  const fond = $('#fTransp').checked
+    ? { color: 'transparent' }
+    : { color: $('#cFond').value };
+
+  const opts = {
+    width: taille, height: taille, type,
+    data: dernierTexte || ' ',
+    margin: (+$('#fMarge').value) * Math.round(taille / 33),
+    qrOptions: {
+      errorCorrectionLevel: $('#fCorrection').value,
+    },
+    dotsOptions: { type: formePoints, ...teinte },
+    cornersSquareOptions: { type: segCoin.valeur, ...teinte },
+    cornersDotOptions: { type: segPupille.valeur, ...teinte },
+    backgroundOptions: fond,
+  };
+
+  if (logoData) {
+    opts.image = logoData;
+    opts.imageOptions = {
+      crossOrigin: 'anonymous',
+      imageSize: (+$('#fLogoT').value) / 100,
+      margin: Math.round((+$('#fLogoM').value) * taille / TAILLE_APERCU),
+      hideBackgroundDots: $('#fLogoTrou').checked,
+    };
+  }
+  return opts;
+}
+
+function peindre() {
+  if (!window.QRCodeStyling) return;
+
+  const type = segType.valeur;
+  dernierTexte = contenu(type);
+
+  const rendu = $('#rendu');
+  $('#cadre').classList.toggle('damier', $('#fTransp').checked);
+
+  if (!dernierTexte) {
+    rendu.innerHTML = '';
+    qr = null;
+    $('#readout').textContent = 'En attente';
+    $('#legende').innerHTML = 'Remplissez le contenu à gauche — le code apparaît ici.';
+    basculerBoutons(false);
+    return;
+  }
+
+  try {
+    const opts = options(TAILLE_APERCU);
+    if (!qr) {
+      qr = new window.QRCodeStyling(opts);
+      rendu.innerHTML = '';
+      qr.append(rendu);
+    } else {
+      qr.update(opts);
+    }
+    $('#alerte').hidden = true;
+  } catch (e) {
+    // Typiquement : contenu trop long pour la correction d'erreur choisie.
+    $('#alerte').hidden = false;
+    $('#alerte').textContent =
+      "Ce contenu ne rentre pas dans un QR code avec ces réglages. " +
+      "Raccourcissez le texte, ou baissez la correction d'erreur.";
+    basculerBoutons(false);
+    return;
+  }
+
+  const n = dernierTexte.length;
+  $('#readout').innerHTML = `<b>${n}</b> caractères`;
+  $('#legende').innerHTML =
+    `<b>${etiquette(type)}</b> · ${n} caractères · correction ${$('#fCorrection').value}` +
+    (logoData ? ' · logo au centre' : '');
+  $('#piedInfo').textContent = `Sortie ${$('#fTaille').value} × ${$('#fTaille').value} px`;
+  basculerBoutons(true);
+}
+
+function etiquette(type) {
+  return { lien:'Lien', texte:'Texte', wifi:'Réseau Wi-Fi', contact:'Contact',
+           mail:'E-mail', sms:'SMS', tel:'Téléphone' }[type] || 'Code';
+}
+
+function basculerBoutons(actif) {
+  ['btnPng','btnPng2','btnSvg','btnJpg','btnCopier']
+    .forEach((id) => { $('#' + id).disabled = !actif; });
+}
+
+/* ------------------------------------------------------------------ */
+/* Export                                                              */
+/* ------------------------------------------------------------------ */
+/** Fabrique une instance neuve à la taille voulue et renvoie le Blob. */
+async function fabriquer(extension) {
+  const svg = extension === 'svg';
+  const taille = svg ? 1024 : +$('#fTaille').value;
+  const instance = new window.QRCodeStyling(options(taille, svg ? 'svg' : 'canvas'));
+
+  // Laisse le temps au logo de se décoder avant la lecture du canvas.
+  if (logoData) await new Promise((r) => setTimeout(r, 120));
+
+  const brut = await instance.getRawData(extension);
+  if (!brut) throw new Error('rendu vide');
+  return brut instanceof Blob ? brut : new Blob([brut]);
+}
+
+async function exporter(extension, mime) {
+  if (!dernierTexte) { dire('Rien à exporter pour l’instant.'); return; }
+  try {
+    dire('Fabrication…');
+    const blob = await fabriquer(extension);
+    const nom = nomPropre($('#fNomFic').value || 'qr-code') + '.' + extension;
+    telecharger(new Blob([blob], { type: mime }), nom, mime);
+    bravo(nom + ' enregistré.');
+  } catch (e) {
+    console.error(e);
+    rater("L'export a échoué : " + (e.message || e));
+  }
+}
+
+$('#btnPng').addEventListener('click',  () => exporter('png', 'image/png'));
+$('#btnPng2').addEventListener('click', () => exporter('png', 'image/png'));
+$('#btnJpg').addEventListener('click',  () => exporter('jpeg', 'image/jpeg'));
+$('#btnSvg').addEventListener('click',  () => exporter('svg', 'image/svg+xml'));
+
+$('#btnCopier').addEventListener('click', async () => {
+  if (!dernierTexte) return;
+  if (!navigator.clipboard?.write) {
+    rater("Votre navigateur ne sait pas copier une image. Téléchargez le PNG.");
+    return;
+  }
+  try {
+    const blob = await fabriquer('png');
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'image/png': new Blob([blob], { type: 'image/png' }) }),
+    ]);
+    bravo('Image copiée — collez-la où vous voulez.');
+  } catch (e) {
+    rater("La copie a échoué. Téléchargez le PNG à la place.");
+  }
+});
+
+/* ------------------------------------------------------------------ */
+document.querySelector('.pal').classList.add('on');
+$('#fLien').focus();
+peindre();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filet — télécharger des audios</title>
+<meta name="description" content="Le compagnon Python de L'Atelier : télécharger le Coran complet par sourate ou par verset, tous les audios d'une page web, ou une vidéo en ligne.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="stylesheet" href="../atelier/atelier.css">
+<style>
+  .page{
+    background-color:var(--tapis);
+    background-image:
+      linear-gradient(var(--grille) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grille) 1px,transparent 1px),
+      linear-gradient(var(--grille-2) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grille-2) 1px,transparent 1px);
+    background-size:12px 12px,12px 12px,60px 60px,60px 60px;
+    background-position:-1px -1px,-1px -1px,-1px -1px,-1px -1px;
+    min-height:calc(100vh - 60px);padding:0 0 60px;
+  }
+  .dedans{max-width:830px;margin:0 auto;padding:0 24px}
+
+  .ouverture{padding:48px 0 8px}
+  .ouverture .kicker{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--reglet);margin:0 0 14px;
+  }
+  .ouverture h2{margin:0 0 14px;font-size:clamp(27px,4vw,40px);line-height:1.1;letter-spacing:-.02em}
+  .ouverture p{margin:0;font-size:15.5px;line-height:1.65;color:var(--craie-2);max-width:62ch}
+
+  h3{
+    margin:44px 0 14px;font-family:var(--mono);font-size:12px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--craie);font-weight:600;
+    padding-bottom:9px;border-bottom:1px solid var(--trait);
+  }
+  h4{margin:26px 0 8px;font-size:15px;font-weight:600;color:var(--craie)}
+  p{line-height:1.65}
+  .txt{color:var(--craie-2);font-size:14px;max-width:66ch}
+  .txt b{color:var(--craie)}
+
+  pre{
+    background:var(--tapis-3);border:1px solid var(--trait);border-left:2px solid var(--reglet);
+    border-radius:var(--r);padding:14px 16px;overflow-x:auto;margin:12px 0;
+    font-family:var(--mono);font-size:12.5px;line-height:1.75;color:var(--craie);
+  }
+  pre .co{color:var(--craie-3)}
+  code{
+    font-family:var(--mono);font-size:12.5px;color:var(--reglet);
+    background:rgba(242,183,5,.1);padding:1px 5px;border-radius:2px;
+  }
+
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--trait);vertical-align:top}
+  th{
+    font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--craie-3);font-weight:500;
+  }
+  td:first-child{white-space:nowrap}
+  td code{background:none;padding:0}
+  .tbl{overflow-x:auto}
+
+  .note{
+    border:1px solid var(--trait);border-left:2px solid var(--repere);border-radius:var(--r);
+    background:rgba(11,26,23,.4);padding:14px 16px;margin:18px 0;font-size:13px;
+    color:var(--craie-3);line-height:1.6;
+  }
+  .note b{color:var(--craie-2);font-weight:500}
+  ul{color:var(--craie-2);font-size:14px;line-height:1.7;padding-left:20px;max-width:66ch}
+  li{margin-bottom:5px}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M20 5v20" stroke="#F2B705" stroke-width="2.8" stroke-linecap="round"/>
+      <path d="m11 18 9 9 9-9" stroke="#FFD34D" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 33h24" stroke="#5FD3B8" stroke-width="2.8" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>Filet</h1>
+      <p>Compagnon de téléchargement</p>
+    </div>
+  </a>
+  <a class="retour" href="../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout">Python 3.8+</div>
+</header>
+
+<main class="page">
+  <div class="dedans">
+
+    <section class="ouverture">
+      <p class="kicker">Compagnon</p>
+      <h2>Le seul outil de l'atelier qui ne tourne pas dans le navigateur.</h2>
+      <p>
+        Une page web n'a pas le droit d'aller chercher un fichier hébergé sur un
+        autre site&nbsp;: c'est une règle de sécurité du navigateur, et elle ne
+        se contourne pas. Le téléchargement en masse passe donc par un petit
+        script Python à lancer sur votre machine.
+      </p>
+    </section>
+
+    <h3>Mise en route</h3>
+    <p class="txt">
+      Aucune installation&nbsp;: le script n'utilise que ce que Python fournit
+      d'origine. Ouvrez un terminal dans le dossier <code>compagnon/</code> et
+      lancez&nbsp;:
+    </p>
+<pre><span class="co"># voir toutes les commandes</span>
+python filet.py --help</pre>
+
+    <div class="note">
+      <b>Sous Windows</b> — si <code>python</code> n'est pas reconnu, essayez
+      <code>py filet.py --help</code>, ou installez Python depuis le Microsoft Store
+      en cochant « Ajouter Python au PATH ».
+    </div>
+
+    <h3>Télécharger le Coran</h3>
+    <p class="txt">
+      La commande la plus simple récupère les 114 sourates récitées par
+      Al-Hussary, nommées proprement, dans un dossier <code>Coran/</code>&nbsp;:
+    </p>
+<pre>python filet.py coran</pre>
+    <p class="txt">
+      Vous obtenez <code>001 - Al-Fatiha.mp3</code>, <code>002 - Al-Baqara.mp3</code>,
+      et ainsi de suite jusqu'à <code>114 - An-Nas.mp3</code>. Comptez environ
+      <b>800 Mo</b> et une bonne heure sur une connexion ordinaire.
+    </p>
+
+    <h4>Verset par verset</h4>
+    <p class="txt">
+      6&nbsp;236 fichiers, rangés dans un sous-dossier par sourate. Idéal pour
+      apprendre&nbsp;:
+    </p>
+<pre>python filet.py coran --mode verset</pre>
+
+    <h4>Une sélection seulement</h4>
+<pre><span class="co"># le dernier juz, verset par verset</span>
+python filet.py coran --mode verset --sourates 78-114
+
+<span class="co"># quelques sourates précises</span>
+python filet.py coran --sourates 1,36,55,67,112-114</pre>
+
+    <h4>Une autre récitation</h4>
+<pre><span class="co"># la liste complète</span>
+python filet.py coran --lister
+
+<span class="co"># la lecture Warsh d'Al-Hussary</span>
+python filet.py coran -r hussary-warsh</pre>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Clé</th><th>Récitation</th><th>Modes</th></tr></thead>
+        <tbody>
+          <tr><td><code>hussary</code></td><td>Al-Hussary — Hafs, murattal</td><td>sourate, verset</td></tr>
+          <tr><td><code>hussary-leger</code></td><td>Al-Hussary — Hafs en 64 kb/s, fichiers deux fois plus légers</td><td>verset</td></tr>
+          <tr><td><code>hussary-mujawwad</code></td><td>Al-Hussary — Mujawwad, lent et orné</td><td>sourate, verset</td></tr>
+          <tr><td><code>hussary-muallim</code></td><td>Al-Hussary — Mu'allim, verset répété pour l'apprentissage</td><td>verset</td></tr>
+          <tr><td><code>hussary-warsh</code></td><td>Al-Hussary — lecture Warsh 'an Nafi'</td><td>sourate</td></tr>
+          <tr><td><code>hussary-qalon</code></td><td>Al-Hussary — lecture Qalon 'an Nafi'</td><td>sourate</td></tr>
+          <tr><td><code>hussary-douri</code></td><td>Al-Hussary — lecture Ad-Douri 'an Abi Amr</td><td>sourate</td></tr>
+          <tr><td><code>abdulbasit</code></td><td>Abdul Basit Abdus Samad</td><td>sourate, verset</td></tr>
+          <tr><td><code>minshawi</code></td><td>Mohamed Siddiq Al-Minshawi</td><td>sourate, verset</td></tr>
+          <tr><td><code>sudais</code></td><td>Abdurrahman As-Sudais</td><td>sourate, verset</td></tr>
+          <tr><td><code>shuraim</code></td><td>Saoud Ash-Shuraim</td><td>sourate, verset</td></tr>
+          <tr><td><code>afasy</code></td><td>Mishary Rashid Al-Afasy</td><td>sourate, verset</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Si la connexion coupe</b> — relancez exactement la même commande. Tout
+      ce qui est déjà téléchargé est sauté, et un fichier interrompu reprend là
+      où il s'était arrêté. Les fichiers incomplets portent l'extension
+      <code>.part</code> et ne sont jamais confondus avec les bons.
+    </div>
+
+    <h3>Explorer un site — le scraping</h3>
+    <p class="txt">
+      C'est le cœur de l'outil. On lui donne une adresse&nbsp;; il fouille la
+      page, <b>dresse l'inventaire de tous les audios qu'il trouve avec leur
+      poids</b>, puis vous laisse tout prendre ou choisir.
+    </p>
+<pre>python filet.py page https://exemple.com/recitations</pre>
+
+    <p class="txt">Ce qui s'affiche&nbsp;:</p>
+<pre><span class="co">  1254 audios trouvés
+  ───────────────────</span>
+     1  001 - Al-Fatiha.mp3                            913 Ko
+     2  002 - Al-Baqara.mp3                             78 Mo
+     3  003 - Al-Imran.mp3                              44 Mo
+        …
+
+  Poids au total : 4.2 Go
+
+  Que voulez-vous faire ?
+    <span class="co">[Entrée]</span>   tout télécharger (1254 fichiers)
+    <span class="co">1,5,10-20</span>  télécharger cette sélection
+    <span class="co">l</span>          revoir la liste complète
+    <span class="co">m</span>          enregistrer la liste dans un fichier
+    <span class="co">q</span>          quitter sans rien télécharger
+  &gt;</pre>
+
+    <p class="txt">
+      Vous tapez <b>Entrée</b> pour tout prendre, ou <b>3,7,20-45</b> pour une
+      sélection. Le volume n'a pas d'importance&nbsp;: le script prend son temps,
+      et une coupure de connexion ne coûte rien puisque tout est reprenable.
+    </p>
+
+    <h4>Où il va chercher</h4>
+    <p class="txt">
+      Beaucoup de sites n'écrivent aucune adresse de fichier dans leur page&nbsp;:
+      ils chargent une <b>playlist</b> en JavaScript. C'est le cas d'Assabile.
+      Le script lit donc, en plus du HTML&nbsp;:
+    </p>
+    <ul>
+      <li>les balises <code>&lt;audio&gt;</code> et <code>&lt;source&gt;</code>&nbsp;;</li>
+      <li>les liens directs vers un fichier, en gardant <b>le texte du lien
+        comme nom</b> — bien plus lisible qu'une adresse&nbsp;;</li>
+      <li>tous les attributs <code>data-*</code> où se cachent les lecteurs&nbsp;;</li>
+      <li>les adresses écrites en dur dans le JavaScript, même échappées&nbsp;;</li>
+      <li>les <b>playlists XSPF, M3U, JSON et les flux RSS de podcast</b>, qui
+        livrent souvent le catalogue entier d'un coup, titres compris.</li>
+    </ul>
+
+    <h4>Aller plus loin dans le site</h4>
+<pre><span class="co"># suivre les liens sur 2 niveaux (index → pages de sourates)</span>
+python filet.py page https://exemple.com -p 2
+
+<span class="co"># en ne suivant que les pages qui nous intéressent</span>
+python filet.py page https://exemple.com -p 2 --filtre "sourate|surah"
+
+<span class="co"># vérifier aussi les liens sans extension : /download/1234</span>
+python filet.py page https://exemple.com --fouiller</pre>
+
+    <div class="note">
+      <b>Un site qui propose dix versions du même titre&nbsp;?</b>
+      <code>--dedoublonner</code> n'en garde qu'une par titre — la plus lourde,
+      donc la mieux encodée. Sur la page d'Al-Hussary chez Assabile, cela ramène
+      1254 fichiers à une centaine.
+    </div>
+
+    <h4>Trier avant de télécharger</h4>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Option</th><th>Effet</th></tr></thead>
+        <tbody>
+          <tr><td><code>--montrer</code></td><td>dresser l'inventaire sans rien télécharger</td></tr>
+          <tr><td><code>--filtre-nom</code></td><td>ne garder que les noms contenant un motif</td></tr>
+          <tr><td><code>--min-mo N</code></td><td>écarter les fichiers de moins de N Mo (jingles, bips)</td></tr>
+          <tr><td><code>--dedoublonner</code></td><td>un seul fichier par titre</td></tr>
+          <tr><td><code>--tout-voir</code></td><td>afficher l'inventaire complet sans le tronquer</td></tr>
+          <tr><td><code>-n</code></td><td>préfixer les fichiers par leur rang : <code>001 - …</code></td></tr>
+          <tr><td><code>-y</code></td><td>tout télécharger sans passer par le menu</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Reprendre un inventaire plus tard</h4>
+    <p class="txt">
+      Depuis le menu, la touche <b>m</b> enregistre la liste trouvée dans un
+      fichier <code>liste-filet.json</code>. On peut y revenir n'importe quand,
+      sans refaire l'exploration&nbsp;:
+    </p>
+<pre>python filet.py liste Telechargements/liste-filet.json</pre>
+
+    <p class="txt">
+      Si le script ne trouve toujours rien, c'est que les liens n'existent
+      qu'une fois la page ouverte dans un vrai navigateur. Dans ce cas, passez
+      par la commande suivante.
+    </p>
+
+    <h3>YouTube et le reste</h3>
+    <p class="txt">
+      Pour tout ce qui résiste, <code>filet</code> passe la main à
+      <b>yt-dlp</b>, qui connaît des milliers de sites&nbsp;:
+    </p>
+<pre><span class="co"># une seule fois</span>
+pip install yt-dlp
+
+<span class="co"># une playlist entière, en MP3</span>
+python filet.py video "https://youtube.com/playlist?list=…" --audio
+
+<span class="co"># une vidéo, en meilleure qualité</span>
+python filet.py video "https://youtu.be/xxxxxxxx"</pre>
+
+    <h3>Réglages utiles</h3>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Option</th><th>Effet</th></tr></thead>
+        <tbody>
+          <tr><td><code>-d DOSSIER</code></td><td>où ranger les fichiers</td></tr>
+          <tr><td><code>-f N</code></td><td>téléchargements simultanés — 4 par défaut, montez à 8 en fibre, descendez à 2 sur une connexion capricieuse</td></tr>
+          <tr><td><code>-y</code></td><td>ne pas demander confirmation</td></tr>
+          <tr><td><code>--gabarit</code></td><td>pointer vers une autre source, ex. <code>"https://exemple.com/{n:03d}.mp3"</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>Si une source ne répond plus</b> — les hébergeurs de récitations
+      changent parfois d'adresse. Le script teste la source avant de se lancer et
+      vous prévient tout de suite, plutôt que d'accumuler des milliers d'échecs.
+      Vous pouvez alors indiquer la nouvelle adresse avec <code>--gabarit</code>.
+    </div>
+
+    <h3>Et après</h3>
+    <p class="txt">
+      Une fois les fichiers sur votre disque, le reste de l'atelier prend le
+      relais&nbsp;: <a href="../outils/alambic/">Alambic</a> pour changer de
+      format ou alléger les fichiers, <a href="../outils/sillon/">Sillon</a> pour
+      extraire le son d'une vidéo téléchargée.
+    </p>
+
+  </div>
+</main>
+
+<footer class="pied">
+  <span><b>Filet</b> — L'Atelier</span>
+  <span>Python 3.8 ou plus récent, sans dépendance obligatoire</span>
+</footer>
+
+</body>
+</html>

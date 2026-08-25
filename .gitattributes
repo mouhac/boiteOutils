@@ -1,0 +1,16 @@
+# Le dépôt stocke tout en LF, quelle que soit la machine qui travaille.
+# Sans ça, un aller-retour Windows transforme chaque fichier en « tout modifié ».
+* text=auto eol=lf
+
+# Fichiers binaires : ne jamais y toucher.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp3 binary
+*.mp4 binary
+*.wasm binary
+*.woff binary
+*.woff2 binary

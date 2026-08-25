@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sillon — extraire le son d'une vidéo</title>
+<meta name="description" content="Extraire la piste audio d'une vidéo en MP3, M4A, WAV ou FLAC. Copie directe sans perte quand c'est possible. Tout se passe dans le navigateur.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="stylesheet" href="../../atelier/atelier.css">
+<style>
+  .etat-moteur{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid var(--trait);border-left:2px solid var(--reglet);
+    border-radius:var(--r);background:rgba(11,26,23,.4);
+    padding:11px 14px;margin-bottom:18px;font-size:12.5px;color:var(--craie-2);
+  }
+  .etat-moteur.pret{border-left-color:var(--repere)}
+  .rang-item.fini{border-color:rgba(95,211,184,.4)}
+  .rang-item.rate{border-color:rgba(229,88,77,.45)}
+  .rang-item .dl{flex:none}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <circle cx="20" cy="20" r="17" fill="#16302A" stroke="#F2B705" stroke-width="2"/>
+      <circle cx="20" cy="20" r="12" stroke="#FFD34D" stroke-width="1.2" opacity=".5" fill="none"/>
+      <circle cx="20" cy="20" r="8" stroke="#FFD34D" stroke-width="1.2" opacity=".5" fill="none"/>
+      <circle cx="20" cy="20" r="3.6" fill="#5FD3B8"/>
+    </svg>
+    <div>
+      <h1>Sillon</h1>
+      <p>Extraire le son d'une vidéo</p>
+    </div>
+  </a>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">Aucun fichier</div>
+  <button class="btn btn-go" id="btnGo" disabled>Extraire</button>
+</header>
+
+<div class="shell">
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <aside class="panel">
+
+    <details class="grp" open>
+      <summary>Format de sortie</summary>
+      <div class="grp-body">
+
+        <div class="field">
+          <div class="seg col" id="segFormat">
+            <button data-v="copie" class="on">Copie directe — sans perte</button>
+            <button data-v="mp3">MP3 — lisible partout</button>
+            <button data-v="m4a">M4A / AAC — meilleur à poids égal</button>
+            <button data-v="ogg">OGG / Opus — le plus compact</button>
+            <button data-v="wav">WAV — brut, non compressé</button>
+            <button data-v="flac">FLAC — compressé sans perte</button>
+          </div>
+        </div>
+
+        <p class="hint" id="motFormat"></p>
+
+        <div class="field" id="champDebit" hidden>
+          <label for="fDebit">Débit</label>
+          <select id="fDebit">
+            <option value="96">96 kb/s — voix, podcast, cours</option>
+            <option value="128">128 kb/s — correct, fichier léger</option>
+            <option value="192" selected>192 kb/s — bon compromis</option>
+            <option value="256">256 kb/s — musique soignée</option>
+            <option value="320">320 kb/s — maximum</option>
+          </select>
+        </div>
+
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary>Retouches</summary>
+      <div class="grp-body">
+
+        <div class="field">
+          <label>Canaux</label>
+          <div class="seg" id="segCanaux">
+            <button data-v="garder" class="on">Garder</button>
+            <button data-v="1">Mono</button>
+            <button data-v="2">Stéréo</button>
+          </div>
+          <p class="hint">Le mono divise le poids par deux sur une voix ou un cours.</p>
+        </div>
+
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optNorm"><span>Égaliser le volume (niveau standard, fin des passages inaudibles)</span></label>
+        </div>
+
+        <div class="field">
+          <label>Extraire</label>
+          <div class="seg" id="segEtendue">
+            <button data-v="tout" class="on">Tout le fichier</button>
+            <button data-v="extrait">Un passage</button>
+          </div>
+        </div>
+
+        <div id="champsExtrait" hidden style="display:flex;flex-direction:column;gap:16px">
+          <div class="field">
+            <label for="fDebut">Début</label>
+            <input type="text" id="fDebut" value="0:00" spellcheck="false" placeholder="0:00">
+          </div>
+          <div class="field">
+            <label for="fFin">Fin</label>
+            <input type="text" id="fFin" spellcheck="false" placeholder="fin du fichier">
+          </div>
+          <p class="hint">Format <b>minutes:secondes</b> ou <b>heures:minutes:secondes</b>. Laisser la fin vide pour aller jusqu'au bout.</p>
+        </div>
+
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Nommage</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="fSuffixe">Suffixe ajouté au nom</label>
+          <input type="text" id="fSuffixe" value="" placeholder="aucun">
+          <p class="hint">Exemple : <b>cours-01.mp4</b> devient <b>cours-01.mp3</b>.</p>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Journal technique</summary>
+      <div class="grp-body">
+        <div class="journal" id="journal">En attente…</div>
+        <button class="btn btn-mini" id="btnVider">Vider</button>
+      </div>
+    </details>
+
+  </aside>
+
+  <!-- ======================= PLATEAU ======================= -->
+  <main class="mat">
+
+    <div class="etat-moteur" id="etatMoteur">
+      <span class="spin" id="spinMoteur" hidden></span>
+      <span id="txtMoteur">Le moteur audio (~32 Mo) se télécharge au premier usage, puis reste en cache.</span>
+    </div>
+
+    <div class="etat-moteur mobile-seulement" style="border-left-color:var(--rouge)">
+      <span>Sur téléphone, restez sur des vidéos courtes&nbsp;: la mémoire d'un
+      navigateur mobile est bien plus serrée que sur un ordinateur. Au-delà de
+      quelques minutes, mieux vaut passer sur un ordinateur.</span>
+    </div>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des vidéos">
+      <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2" y="5" width="14" height="14" rx="2"/><path d="m16 10 6-3v10l-6-3"/>
+      </svg>
+      <h2 class="drop-t">Déposez vos vidéos</h2>
+      <p class="drop-s">
+        MP4, MOV, MKV, AVI, WebM… Plusieurs fichiers à la fois, ils seront
+        traités les uns après les autres.
+      </p>
+      <span class="fauxbtn">Choisir des fichiers</span>
+      <p class="drop-f">Rien n'est envoyé sur internet</p>
+    </div>
+
+    <div class="section-head" id="teteLot" hidden>
+      <h2>Fichiers</h2>
+      <span class="count" id="compte">0</span>
+      <div class="tools">
+        <button class="btn btn-mini" id="btnToutDl" hidden>Tout télécharger</button>
+        <button class="btn btn-mini" id="btnVidez">Tout retirer</button>
+      </div>
+    </div>
+
+    <ul class="rangs" id="lot"></ul>
+
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Sillon</b> — L'Atelier</span>
+  <span>Vos vidéos ne quittent pas cet onglet</span>
+  <span id="piedInfo"></span>
+</footer>
+
+<script type="module">
+import { $, $$, dire, bravo, rater, poids, duree, versSecondes, versHorodate,
+         sansExtension, telecharger, zoneDepot, segment, journal, sonder,
+         verrouFermeture, patienter } from '../../atelier/ui.js';
+import { charger, executer, analyser, contenantPour, versBlob, ext, multiCoeurs }
+  from '../../atelier/moteur.js';
+
+/* ------------------------------------------------------------------ */
+/* État                                                                */
+/* ------------------------------------------------------------------ */
+let lot = [];          // { id, fichier, duree, codec, etat, part, blob, nomSortie, message }
+let compteur = 0;
+let enCours = false;
+
+const jrn = journal($('#journal'));
+
+/* ------------------------------------------------------------------ */
+/* Réglages                                                            */
+/* ------------------------------------------------------------------ */
+const MOTS = {
+  copie: "La piste est recopiée telle quelle, sans être réencodée : qualité strictement identique à l'original, et c'est presque instantané. Le format du fichier produit dépend de ce que contient la vidéo.",
+  mp3:   "Le format qui s'ouvre sur absolument tout, y compris les vieux autoradios et les clés USB.",
+  m4a:   "À poids égal, meilleur que le MP3. Lu par tous les téléphones et ordinateurs récents.",
+  ogg:   "Le plus efficace pour la voix : très léger à qualité égale. Certains vieux lecteurs ne l'ouvrent pas.",
+  wav:   "Aucune compression : qualité parfaite mais fichier très lourd. Pour du montage.",
+  flac:  "Compressé sans perdre un octet de qualité. Environ la moitié du poids d'un WAV.",
+};
+
+const segFormat = segment($('#segFormat'), (v) => {
+  $('#motFormat').textContent = MOTS[v];
+  $('#champDebit').hidden = !['mp3', 'm4a', 'ogg'].includes(v);
+  rafraichir();
+});
+$('#motFormat').textContent = MOTS.copie;
+
+const segCanaux = segment($('#segCanaux'));
+const segEtendue = segment($('#segEtendue'), (v) => {
+  $('#champsExtrait').hidden = v !== 'extrait';
+});
+
+/* ------------------------------------------------------------------ */
+/* Réception des fichiers                                              */
+/* ------------------------------------------------------------------ */
+zoneDepot($('#drop'), ajouter, { accepte: 'video/*,audio/*,.mkv,.mov,.avi,.flv,.wmv,.ts,.m4v' });
+
+async function ajouter(fichiers) {
+  for (const f of fichiers) {
+    const piece = {
+      id: ++compteur, fichier: f,
+      duree: 0, codec: '', etat: 'attente', part: 0,
+      blob: null, nomSortie: '', message: '',
+    };
+    lot.push(piece);
+
+    // Durée lue par le navigateur : instantané, sans réveiller ffmpeg.
+    sonder(f)
+      .then((i) => { piece.duree = i.duree; rafraichir(); })
+      .catch(() => {});
+  }
+  rafraichir();
+}
+
+$('#btnVidez').addEventListener('click', () => {
+  if (enCours) { dire('Extraction en cours — patientez.'); return; }
+  lot = [];
+  rafraichir();
+});
+
+/* ------------------------------------------------------------------ */
+/* Affichage                                                           */
+/* ------------------------------------------------------------------ */
+const ETIQUETTES = {
+  attente: '', analyse: 'analyse…', travail: '', fini: 'prêt', rate: 'échec',
+};
+
+function rafraichir() {
+  $('#teteLot').hidden = !lot.length;
+  $('#compte').textContent = lot.length;
+  $('#btnGo').disabled = !lot.length || enCours;
+  $('#btnToutDl').hidden = lot.filter((p) => p.blob).length < 2;
+
+  const total = lot.reduce((s, p) => s + p.fichier.size, 0);
+  $('#readout').innerHTML = lot.length
+    ? `<b>${lot.length}</b> fichier${lot.length > 1 ? 's' : ''} · ${poids(total)}`
+    : 'Aucun fichier';
+
+  $('#lot').innerHTML = lot.map((p, n) => {
+    const cl = p.etat === 'fini' ? ' fini' : p.etat === 'rate' ? ' rate' : '';
+    const sousTitre = p.etat === 'fini'
+      ? `${p.nomSortie.split('.').pop().toUpperCase()} · ${poids(p.blob.size)}` +
+        (p.fichier.size ? ` · ${Math.round(p.blob.size / p.fichier.size * 100)} % du poids d'origine` : '')
+      : [ext(p.fichier.name).toUpperCase(), poids(p.fichier.size),
+         p.duree ? duree(p.duree) : null, p.codec ? 'piste ' + p.codec : null]
+        .filter(Boolean).join(' · ');
+
+    const etat = p.etat === 'travail'
+      ? `${Math.round(p.part * 100)} %`
+      : p.etat === 'rate' ? 'échec' : ETIQUETTES[p.etat] || '';
+
+    return `
+      <li class="rang-item${cl}" data-id="${p.id}">
+        <span class="no">${String(n + 1).padStart(2, '0')}</span>
+        <span class="txt">
+          <span class="nm">${echapper(p.etat === 'fini' ? p.nomSortie : p.fichier.name)}</span>
+          <span class="sub">${echapper(p.message || sousTitre)}</span>
+        </span>
+        <span class="etat ${p.etat === 'fini' ? 'ok' : p.etat === 'rate' ? 'err' : ''}">${etat}</span>
+        <span class="acts dl">
+          ${p.blob ? `<button class="btn btn-mini" data-a="dl">Enregistrer</button>` : ''}
+          <button data-a="del" class="del" title="Retirer" aria-label="Retirer">&#10005;</button>
+        </span>
+        <i class="jauge" style="width:${p.etat === 'travail' ? p.part * 100 : p.etat === 'fini' ? 100 : 0}%"></i>
+      </li>`;
+  }).join('');
+}
+
+const echapper = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+$('#lot').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-a]');
+  if (!b) return;
+  const id = +b.closest('.rang-item').dataset.id;
+  const p = lot.find((x) => x.id === id);
+  if (!p) return;
+
+  if (b.dataset.a === 'dl' && p.blob) {
+    telecharger(p.blob, p.nomSortie);
+  } else if (b.dataset.a === 'del') {
+    if (enCours && p.etat === 'travail') { dire('Ce fichier est en cours de traitement.'); return; }
+    lot = lot.filter((x) => x.id !== id);
+    rafraichir();
+  }
+});
+
+$('#btnToutDl').addEventListener('click', async () => {
+  const prets = lot.filter((p) => p.blob);
+  for (const p of prets) {
+    telecharger(p.blob, p.nomSortie);
+    await patienter(350);   // certains navigateurs bloquent les rafales
+  }
+  bravo(`${prets.length} fichiers enregistrés.`);
+});
+
+$('#btnVider').addEventListener('click', () => jrn.vider());
+
+/* ------------------------------------------------------------------ */
+/* Construction de la commande                                         */
+/* ------------------------------------------------------------------ */
+function bornes() {
+  if (segEtendue.valeur !== 'extrait') return null;
+  const debut = versSecondes($('#fDebut').value || '0');
+  const finTxt = ($('#fFin').value || '').trim();
+  const fin = finTxt ? versSecondes(finTxt) : NaN;
+
+  if (isNaN(debut) || debut < 0) throw new Error('Le début du passage est illisible.');
+  if (finTxt && (isNaN(fin) || fin <= debut)) throw new Error('La fin du passage doit venir après le début.');
+  return { debut, fin: finTxt ? fin : null };
+}
+
+function commande(piece, format, extSortie) {
+  const nomEntree = 'e.' + (ext(piece.fichier.name) || 'bin');
+  const nomSortie = 's.' + extSortie;
+  const args = [];
+
+  const b = bornes();
+  if (b && b.debut > 0) args.push('-ss', versHorodate(b.debut));  // avant -i : recherche rapide
+  args.push('-i', nomEntree);
+  // La fin est exprimée en durée après le point de départ : c'est la seule
+  // écriture qui reste juste quand -ss est placé avant -i.
+  if (b && b.fin != null) args.push('-t', versHorodate(b.fin - b.debut));
+  args.push('-vn', '-map', '0:a:0');
+
+  const debit = $('#fDebit').value + 'k';
+  const filtres = [];
+  if ($('#optNorm').checked) filtres.push('loudnorm=I=-16:TP=-1.5:LRA=11');
+
+  if (format === 'copie') {
+    args.push('-c:a', 'copy');
+  } else {
+    if (segCanaux.valeur !== 'garder') args.push('-ac', segCanaux.valeur);
+    if (filtres.length) args.push('-af', filtres.join(','));
+
+    if (format === 'mp3')       args.push('-c:a', 'libmp3lame', '-b:a', debit);
+    else if (format === 'm4a')  args.push('-c:a', 'aac', '-b:a', debit);
+    else if (format === 'ogg')  args.push('-c:a', 'libopus', '-b:a', debit);
+    else if (format === 'wav')  args.push('-c:a', 'pcm_s16le');
+    else if (format === 'flac') args.push('-c:a', 'flac');
+  }
+
+  args.push('-y', nomSortie);
+  return { args, nomEntree, nomSortie };
+}
+
+/* Durée réellement traitée, pour une barre de progression juste. */
+function dureeUtile(piece) {
+  const b = (() => { try { return bornes(); } catch (_) { return null; } })();
+  if (!b) return piece.duree;
+  const fin = b.fin != null ? b.fin : piece.duree;
+  return Math.max(0, fin - b.debut);
+}
+
+/* ------------------------------------------------------------------ */
+/* Traitement                                                          */
+/* ------------------------------------------------------------------ */
+$('#btnGo').addEventListener('click', lancer);
+
+async function lancer() {
+  if (enCours) return;
+  try { bornes(); } catch (e) { rater(e.message); return; }
+
+  const aFaire = lot.filter((p) => p.etat !== 'fini');
+  if (!aFaire.length) { dire('Tout est déjà extrait.'); return; }
+
+  enCours = true;
+  verrouFermeture(true);
+  $('#btnGo').disabled = true;
+  $('#btnGo').textContent = 'Extraction…';
+
+  try {
+    await preparerMoteur();
+  } catch (e) {
+    rater("Le moteur n'a pas pu démarrer : " + e.message);
+    finir();
+    return;
+  }
+
+  let reussis = 0;
+  for (const piece of aFaire) {
+    try {
+      await traiter(piece);
+      reussis++;
+    } catch (e) {
+      piece.etat = 'rate';
+      piece.message = e.message;
+      jrn.ecrire(`[${piece.fichier.name}] ÉCHEC — ${e.message}`);
+    }
+    rafraichir();
+  }
+
+  finir();
+  if (reussis) bravo(`${reussis} piste${reussis > 1 ? 's' : ''} extraite${reussis > 1 ? 's' : ''}.`);
+  else rater("Aucune piste n'a pu être extraite — voir le journal technique.");
+}
+
+function finir() {
+  enCours = false;
+  verrouFermeture(false);
+  $('#btnGo').textContent = 'Extraire';
+  rafraichir();
+}
+
+async function traiter(piece) {
+  let format = segFormat.valeur;
+
+  piece.etat = 'analyse';
+  piece.message = '';
+  rafraichir();
+
+  const infos = await analyser(piece.fichier);
+  piece.codec = infos.codecAudio;
+  if (infos.duree) piece.duree = infos.duree;
+  jrn.ecrire(`[${piece.fichier.name}] piste ${infos.codecAudio || '?'} · ${duree(infos.duree)}`);
+
+  if (!infos.codecAudio) {
+    throw new Error("Ce fichier ne contient aucune piste audio.");
+  }
+
+  // Copie directe : on choisit le contenant d'après le codec trouvé.
+  let extSortie;
+  if (format === 'copie') {
+    extSortie = contenantPour(infos.codecAudio);
+    if (!extSortie) {
+      format = 'mp3';
+      extSortie = 'mp3';
+      piece.message = `Piste ${infos.codecAudio} non recopiable — convertie en MP3.`;
+      jrn.ecrire(`[${piece.fichier.name}] codec ${infos.codecAudio} : bascule en MP3`);
+    }
+  } else {
+    extSortie = format;
+  }
+
+  const { args, nomEntree, nomSortie } = commande(piece, format, extSortie);
+  jrn.ecrire(`[${piece.fichier.name}] ffmpeg ${args.join(' ')}`);
+
+  piece.etat = 'travail';
+  piece.part = 0;
+  rafraichir();
+
+  const donnees = await executer({
+    entrees: [{ nom: nomEntree, donnees: piece.fichier }],
+    args, sortie: nomSortie,
+    duree: dureeUtile(piece),
+    surProgression: (p) => {
+      piece.part = p;
+      const barre = $(`.rang-item[data-id="${piece.id}"] .jauge`);
+      const etat = $(`.rang-item[data-id="${piece.id}"] .etat`);
+      if (barre) barre.style.width = (p * 100) + '%';
+      if (etat) etat.textContent = Math.round(p * 100) + ' %';
+    },
+    surJournal: (l) => { if (/error|invalid|failed|unable/i.test(l)) jrn.ecrire(l); },
+  });
+
+  const suffixe = $('#fSuffixe').value.trim();
+  piece.blob = versBlob(donnees, extSortie);
+  piece.nomSortie = sansExtension(piece.fichier.name) + suffixe + '.' + extSortie;
+  piece.etat = 'fini';
+  piece.part = 1;
+  jrn.ecrire(`[${piece.nomSortie}] ${poids(piece.blob.size)} — terminé`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Moteur                                                              */
+/* ------------------------------------------------------------------ */
+let moteurPret = false;
+
+async function preparerMoteur() {
+  if (moteurPret) return;
+  const zone = $('#etatMoteur');
+  $('#spinMoteur').hidden = false;
+
+  await charger((etape) => { $('#txtMoteur').textContent = etape; });
+
+  moteurPret = true;
+  $('#spinMoteur').hidden = true;
+  zone.classList.add('pret');
+  $('#txtMoteur').textContent =
+    `Moteur prêt (${multiCoeurs() ? 'multi-cœurs' : 'mono-cœur'}). ` +
+    `Tout le traitement se fait sur votre machine.`;
+}
+
+$('#piedInfo').textContent = multiCoeurs()
+  ? 'Moteur multi-cœurs disponible'
+  : 'Moteur mono-cœur — plus lent sur les longues vidéos';
+
+rafraichir();
+</script>
+
+</body>
+</html>

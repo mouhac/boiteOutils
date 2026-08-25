@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gomme — effacer un texte dans une vidéo</title>
+<meta name="description" content="Effacer un texte, un pseudo ou un logo incrusté dans une vidéo : reconstruction, flou, pixelisation ou recadrage. Sélection du cadre à la souris, aperçu avant rendu.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="stylesheet" href="../../atelier/atelier.css">
+<style>
+  .etat-moteur{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid var(--trait);border-left:2px solid var(--reglet);
+    border-radius:var(--r);background:rgba(11,26,23,.4);
+    padding:11px 14px;margin-bottom:18px;font-size:12.5px;color:var(--craie-2);
+  }
+  .etat-moteur.pret{border-left-color:var(--repere)}
+
+  .scene{
+    position:relative;background:#000;border:1px solid var(--trait);border-radius:4px;
+    overflow:hidden;box-shadow:0 18px 44px rgba(0,0,0,.45);
+    display:grid;place-items:center;min-height:180px;
+  }
+  #toile{display:block;max-width:100%;height:auto;cursor:crosshair;touch-action:none}
+  .scene.occupe::after{
+    content:'';position:absolute;inset:0;background:rgba(11,26,23,.55);
+  }
+  .voile{
+    position:absolute;inset:0;display:grid;place-items:center;z-index:2;
+    color:var(--craie-2);font-family:var(--mono);font-size:12px;letter-spacing:.08em;
+    background:rgba(11,26,23,.72);text-align:center;padding:20px;
+  }
+
+  .barre-outils{
+    display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 0;
+  }
+  .barre-outils .pousse{margin-left:auto}
+
+  .curseur-temps{display:flex;align-items:center;gap:12px;margin-top:14px}
+  .curseur-temps input{flex:1}
+  .curseur-temps .tps{
+    font-family:var(--mono);font-size:11px;color:var(--craie-2);
+    border:1px solid var(--trait);border-radius:var(--r);padding:4px 8px;white-space:nowrap;
+  }
+
+  .duo-apercu{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}
+  .duo-apercu figure{margin:0}
+  .duo-apercu figcaption{
+    font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--craie-3);margin-bottom:6px;
+  }
+  .duo-apercu img{
+    width:100%;display:block;border:1px solid var(--trait);border-radius:3px;background:#000;
+  }
+
+  .zones{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .zone{
+    display:flex;align-items:center;gap:9px;border:1px solid var(--trait);
+    border-radius:var(--r);padding:7px 9px;background:var(--tapis-3);
+  }
+  .zone .pastille{
+    width:16px;height:16px;border-radius:2px;flex:none;
+    display:grid;place-items:center;font-family:var(--mono);font-size:9px;
+    font-weight:600;color:#12241F;background:var(--reglet);
+  }
+  .zone .co{font-family:var(--mono);font-size:10.5px;color:var(--craie-2);flex:1;letter-spacing:.02em}
+
+  .conseil{
+    border:1px solid var(--trait);border-left:2px solid var(--repere);
+    border-radius:var(--r);background:rgba(11,26,23,.4);
+    padding:12px 14px;font-size:12px;line-height:1.55;color:var(--craie-3);margin-top:18px;
+  }
+  .conseil b{color:var(--craie-2);font-weight:500}
+  .conseil p{margin:0 0 7px}
+  .conseil p:last-child{margin:0}
+
+  [hidden]{display:none!important}
+
+  @media (max-width:900px){
+    /* Deux images côte à côte sur 375 px font 175 px chacune : impossible
+       de juger si la marque a disparu. On les empile. */
+    .duo-apercu{grid-template-columns:1fr;gap:18px}
+    .barre-outils{gap:10px}
+    .barre-outils .btn{flex:1 1 auto}
+    .barre-outils .pousse{display:none}
+    .curseur-temps{flex-wrap:wrap}
+    .curseur-temps input{flex:1 1 100%;order:3}
+    .conseil{font-size:12.5px}
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M6 27.5 20.5 13a3 3 0 0 1 4.2 0l6.3 6.3a3 3 0 0 1 0 4.2L21.5 33H11L6 28.6a1.5 1.5 0 0 1 0-1.1z" fill="#F2B705"/>
+      <path d="M17 16.5 27.5 27" stroke="#16302A" stroke-width="2" stroke-linecap="round"/>
+      <path d="M13 36h22" stroke="#5FD3B8" stroke-width="2.4" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>Gomme</h1>
+      <p>Effacer un texte dans une vidéo</p>
+    </div>
+  </a>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">Aucune vidéo</div>
+  <button class="btn btn-go" id="btnGo" disabled>Rendre la vidéo</button>
+</header>
+
+<div class="shell large">
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <aside class="panel">
+
+    <details class="grp" open>
+      <summary>Méthode</summary>
+      <div class="grp-body">
+        <div class="seg col" id="segMethode">
+          <button data-v="delogo" class="on">Reconstruire la zone</button>
+          <button data-v="flou">Flouter</button>
+          <button data-v="pixel">Pixeliser</button>
+          <button data-v="crop">Recadrer (couper le bord)</button>
+        </div>
+        <p class="hint" id="motMethode"></p>
+
+        <div class="field" id="champForce" hidden>
+          <label for="fForce">Intensité <span id="forceV">14</span></label>
+          <input type="range" id="fForce" min="4" max="40" step="1" value="14">
+        </div>
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary>Zones</summary>
+      <div class="grp-body">
+        <p class="hint" id="motZones">
+          Tracez un cadre à la souris directement sur l'image, par-dessus le
+          texte à faire disparaître. Vous pouvez en tracer plusieurs.
+        </p>
+        <ul class="zones" id="listeZones"></ul>
+        <button class="btn btn-mini" id="btnZonesOff" hidden>Tout effacer</button>
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary>Rendu</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label>Qualité</label>
+          <div class="seg" id="segQualite">
+            <button data-v="haute">Haute</button>
+            <button data-v="standard" class="on">Standard</button>
+            <button data-v="legere">Légère</button>
+          </div>
+          <p class="hint">La vidéo est forcément réencodée : « Haute » reste
+            visuellement indiscernable de l'original.</p>
+        </div>
+        <div class="field">
+          <label for="fResol">Résolution</label>
+          <select id="fResol">
+            <option value="0" selected>Garder l'original</option>
+            <option value="1080">1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+          </select>
+        </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optSon" checked><span>Garder la piste audio d'origine</span></label>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Journal technique</summary>
+      <div class="grp-body">
+        <div class="journal" id="journal">En attente…</div>
+        <button class="btn btn-mini" id="btnVider">Vider</button>
+      </div>
+    </details>
+
+  </aside>
+
+  <!-- ======================= PLATEAU ======================= -->
+  <main class="mat">
+
+    <div class="etat-moteur" id="etatMoteur">
+      <span class="spin" id="spinMoteur" hidden></span>
+      <span id="txtMoteur">Le moteur vidéo (~32 Mo) se télécharge au premier usage, puis reste en cache.</span>
+    </div>
+
+    <div class="etat-moteur mobile-seulement" style="border-left-color:var(--rouge)">
+      <span>Sur téléphone, le tracé des zones marche au doigt, mais le rendu
+      d'une vidéo demande beaucoup de mémoire. Restez sur des extraits courts,
+      ou faites le rendu depuis un ordinateur.</span>
+    </div>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choisir une vidéo">
+      <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2" y="5" width="14" height="14" rx="2"/><path d="m16 10 6-3v10l-6-3"/>
+      </svg>
+      <h2 class="drop-t">Déposez la vidéo à nettoyer</h2>
+      <p class="drop-s">
+        MP4, MOV, WebM, MKV… Une vidéo à la fois : vous allez tracer les zones
+        à effacer sur l'image.
+      </p>
+      <span class="fauxbtn">Choisir une vidéo</span>
+      <p class="drop-f">Rien n'est envoyé sur internet</p>
+    </div>
+
+    <div id="atelierVideo" hidden>
+
+      <div class="section-head">
+        <h2 id="titreVideo">Vidéo</h2>
+        <div class="tools">
+          <button class="btn btn-mini" id="btnAutre">Changer de vidéo</button>
+        </div>
+      </div>
+
+      <div class="scene" id="scene">
+        <canvas id="toile"></canvas>
+        <div class="voile" id="voile" hidden></div>
+      </div>
+
+      <div class="curseur-temps">
+        <span class="tps" id="tpsV">0:00</span>
+        <input type="range" id="fTemps" min="0" max="100" step="0.1" value="0">
+        <span class="tps" id="tpsFin">0:00</span>
+      </div>
+
+      <div class="barre-outils">
+        <button class="btn" id="btnApercu" disabled>Aperçu du rendu</button>
+        <button class="btn btn-mini" id="btnAnnuler" disabled>Annuler la dernière zone</button>
+        <span class="pousse"></span>
+        <button class="btn btn-go" id="btnGo2" disabled>Rendre la vidéo</button>
+      </div>
+
+      <div class="barre" id="barreRendu" hidden><i id="jaugeRendu"></i></div>
+
+      <div class="duo-apercu" id="duoApercu" hidden>
+        <figure>
+          <figcaption>Avant</figcaption>
+          <img id="imgAvant" alt="Image d'origine">
+        </figure>
+        <figure>
+          <figcaption>Après</figcaption>
+          <img id="imgApres" alt="Image après traitement">
+        </figure>
+      </div>
+
+      <div id="resultat" hidden>
+        <div class="section-head"><h2>Vidéo nettoyée</h2></div>
+        <ul class="rangs">
+          <li class="rang-item fini">
+            <span class="no">OK</span>
+            <span class="txt">
+              <span class="nm" id="resNom"></span>
+              <span class="sub" id="resSub"></span>
+            </span>
+            <span class="acts">
+              <button class="btn btn-mini" id="btnEnregistrer">Enregistrer</button>
+            </span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="conseil">
+        <p><b>Ce que chaque méthode sait faire.</b></p>
+        <p><b>Reconstruire</b> devine la zone à partir des pixels autour. C'est le
+          seul mode qui fait vraiment disparaître la marque — excellent sur un petit
+          logo ou un pseudo dans un coin, sur un fond calme. Sur un fond qui bouge
+          beaucoup, la zone reste un peu floue.</p>
+        <p><b>Flouter</b> et <b>pixeliser</b> ne suppriment pas la marque, ils la
+          rendent illisible. C'est robuste quel que soit le fond, mais ça se voit.</p>
+        <p><b>Recadrer</b> coupe purement et simplement : le résultat est parfait,
+          au prix d'une image un peu plus petite. Le bon choix quand le texte est
+          collé à un bord.</p>
+        <p>Un gros sous-titre au milieu de l'image ne peut pas être retiré sans
+          laisser de trace, ni ici ni ailleurs&nbsp;: ce qui est dessous n'a jamais
+          été enregistré. Dans ce cas, recadrez ou floutez.</p>
+      </div>
+
+    </div>
+
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Gomme</b> — L'Atelier</span>
+  <span>Votre vidéo ne quitte pas cet onglet</span>
+  <span id="piedInfo"></span>
+</footer>
+
+<script type="module">
+import { $, dire, bravo, rater, poids, duree, versHorodate, sansExtension,
+         telecharger, zoneDepot, segment, curseur, journal, sonder,
+         verrouFermeture } from '../../atelier/ui.js';
+import { charger, executer, analyser, obstacleVideo, versBlob, ext, multiCoeurs }
+  from '../../atelier/moteur.js';
+
+/* ------------------------------------------------------------------ */
+/* État                                                                */
+/* ------------------------------------------------------------------ */
+let video = null;        // le File
+let infos = null;        // résultat de analyser()
+let cadre = null;        // ImageBitmap ou HTMLImageElement de l'image courante
+let dims = { l: 0, h: 0 };
+let zones = [];          // { x, y, w, h } en pixels de la vidéo
+let occupe = false;
+let sortie = null;       // { blob, nom }
+
+const jrn = journal($('#journal'));
+const toile = $('#toile');
+const ctx = toile.getContext('2d');
+
+/* ------------------------------------------------------------------ */
+/* Réglages                                                            */
+/* ------------------------------------------------------------------ */
+const MOTS = {
+  delogo: "La zone est recalculée à partir des pixels qui l'entourent. Le seul mode qui efface vraiment. Gardez le cadre serré : plus il est grand, plus la reconstruction se voit.",
+  flou:   "La zone est floutée. La marque reste visible en tant que tache, mais devient illisible.",
+  pixel:  "La zone est transformée en gros carrés. Effet volontairement visible, très robuste.",
+  crop:   "Tracez le cadre de ce que vous voulez GARDER : tout le reste est coupé. Aucune perte de qualité dans la zone conservée.",
+};
+
+let methodePrecedente = 'delogo';
+
+const segMethode = segment($('#segMethode'), (v) => {
+  $('#motMethode').textContent = MOTS[v];
+  $('#champForce').hidden = !['flou', 'pixel'].includes(v);
+  $('#motZones').textContent = v === 'crop'
+    ? "Tracez sur l'image le cadre de la partie à conserver. Une seule zone."
+    : "Tracez un cadre à la souris directement sur l'image, par-dessus le texte à faire disparaître. Vous pouvez en tracer plusieurs.";
+
+  // En recadrage, le cadre désigne ce qu'on GARDE ; partout ailleurs, ce
+  // qu'on FAIT DISPARAÎTRE. Le sens s'inversant, garder les zones tracées
+  // avant la bascule ferait exactement le contraire de ce qu'on croit.
+  const traverse = (v === 'crop') !== (methodePrecedente === 'crop');
+  if (traverse && zones.length) {
+    zones = [];
+    dire('Zones effacées : en recadrage, le cadre désigne ce qu’on garde.');
+  }
+  methodePrecedente = v;
+
+  peindre(); majZones();
+});
+$('#motMethode').textContent = MOTS.delogo;
+
+const segQualite = segment($('#segQualite'));
+curseur($('#fForce'), $('#forceV'), (v) => v);
+$('#fForce').addEventListener('input', peindre);
+$('#btnVider').addEventListener('click', () => jrn.vider());
+
+/* ------------------------------------------------------------------ */
+/* Chargement de la vidéo                                              */
+/* ------------------------------------------------------------------ */
+zoneDepot($('#drop'), (fichiers) => accueillir(fichiers[0]), {
+  accepte: 'video/*,.mkv,.mov,.avi,.flv,.wmv,.ts,.m4v',
+  multiple: false,
+});
+
+$('#btnAutre').addEventListener('click', () => {
+  video = null; infos = null; cadre = null; zones = []; sortie = null;
+  $('#atelierVideo').hidden = true;
+  $('#drop').hidden = false;
+  $('#resultat').hidden = true;
+  $('#duoApercu').hidden = true;
+  $('#readout').textContent = 'Aucune vidéo';
+  $('#btnGo').disabled = true;
+  $('#btnGo2').disabled = true;
+});
+
+async function accueillir(fichier) {
+  if (!fichier) return;
+  video = fichier;
+  zones = []; sortie = null; cadre = null;
+  $('#resultat').hidden = true;
+  $('#duoApercu').hidden = true;
+  $('#drop').hidden = true;
+  $('#atelierVideo').hidden = false;
+  $('#titreVideo').textContent = fichier.name;
+  $('#readout').innerHTML = `<b>${poids(fichier.size)}</b>`;
+  majZones();
+
+  // Première tentative : le lecteur natif, instantané.
+  try {
+    const i = await sonder(fichier);
+    if (i.largeur && i.hauteur) {
+      dims = { l: i.largeur, h: i.hauteur };
+      preparerCurseur(i.duree);
+      await cadreNatif(0);
+      $('#readout').innerHTML =
+        `<b>${dims.l}×${dims.h}</b> · ${duree(i.duree)} · ${poids(fichier.size)}`;
+      jrn.ecrire(`[${fichier.name}] ${dims.l}×${dims.h} · ${duree(i.duree)} (lecteur natif)`);
+      return;
+    }
+  } catch (_) { /* format que le navigateur ne décode pas */ }
+
+  // Sinon : on passe par ffmpeg pour l'analyse et l'extraction d'image.
+  voiler('Le navigateur ne sait pas lire ce format — préparation par le moteur…');
+  try {
+    await preparerMoteur();
+    infos = await analyser(fichier);
+    if (!infos.largeur) throw new Error('Dimensions introuvables');
+    dims = { l: infos.largeur, h: infos.hauteur };
+    preparerCurseur(infos.duree);
+    await cadreFfmpeg(0);
+    $('#readout').innerHTML =
+      `<b>${dims.l}×${dims.h}</b> · ${duree(infos.duree)} · ${poids(fichier.size)}`;
+    jrn.ecrire(`[${fichier.name}] ${dims.l}×${dims.h} · ${duree(infos.duree)} (moteur)`);
+  } catch (e) {
+    rater("Cette vidéo n'a pas pu être ouverte : " + e.message);
+    $('#btnAutre').click();
+  } finally {
+    devoiler();
+  }
+}
+
+function preparerCurseur(d) {
+  const total = d || 0;
+  $('#fTemps').max = Math.max(0.1, total);
+  $('#fTemps').value = 0;
+  $('#tpsFin').textContent = duree(total);
+  $('#tpsV').textContent = '0:00';
+}
+
+/* ---- Extraction d'une image : chemin natif ---- */
+let lecteur = null;
+
+function cadreNatif(temps) {
+  return new Promise((resolve, reject) => {
+    if (!lecteur) {
+      lecteur = document.createElement('video');
+      lecteur.muted = true;
+      lecteur.preload = 'auto';
+    }
+    if (lecteur.dataset.pour !== String(video.size) + video.name) {
+      if (lecteur.src) URL.revokeObjectURL(lecteur.src);
+      lecteur.src = URL.createObjectURL(video);
+      lecteur.dataset.pour = String(video.size) + video.name;
+    }
+
+    const dessiner = () => {
+      try {
+        toile.width = dims.l; toile.height = dims.h;
+        ctx.drawImage(lecteur, 0, 0, dims.l, dims.h);
+        cadre = 'natif';
+        peindre._gele = false;      // nouvelle image : le fond doit être repris
+        peindre();
+        resolve();
+      } catch (e) { reject(e); }
+    };
+
+    const partir = () => {
+      lecteur.currentTime = Math.min(temps, Math.max(0, (lecteur.duration || 1) - 0.05));
+    };
+
+    lecteur.onseeked = dessiner;
+    lecteur.onerror = () => reject(new Error('lecture impossible'));
+
+    if (lecteur.readyState >= 2) partir();
+    else lecteur.onloadeddata = partir;
+  });
+}
+
+/* ---- Extraction d'une image : chemin ffmpeg ---- */
+async function cadreFfmpeg(temps) {
+  const nomEntree = 'e.' + (ext(video.name) || 'bin');
+  const donnees = await executer({
+    entrees: [{ nom: nomEntree, donnees: video }],
+    args: ['-ss', versHorodate(temps), '-i', nomEntree, '-frames:v', '1', '-q:v', '3', '-y', 'c.jpg'],
+    sortie: 'c.jpg',
+  });
+  const url = URL.createObjectURL(versBlob(donnees, 'jpg'));
+  const img = new Image();
+  await new Promise((r, j) => { img.onload = r; img.onerror = j; img.src = url; });
+  toile.width = dims.l; toile.height = dims.h;
+  ctx.drawImage(img, 0, 0, dims.l, dims.h);
+  URL.revokeObjectURL(url);
+  cadre = 'ffmpeg';
+  peindre._gele = false;          // nouvelle image : le fond doit être repris
+  peindre();
+}
+
+/* Le curseur de temps redessine l'image de référence. */
+let minuteurTemps = null;
+$('#fTemps').addEventListener('input', () => {
+  const t = +$('#fTemps').value;
+  $('#tpsV').textContent = duree(t);
+  clearTimeout(minuteurTemps);
+  minuteurTemps = setTimeout(async () => {
+    if (occupe || !video) return;
+    try {
+      if (cadre === 'ffmpeg') { voiler('Extraction de l’image…'); await cadreFfmpeg(t); devoiler(); }
+      else await cadreNatif(t);
+    } catch (_) { devoiler(); }
+  }, 180);
+});
+
+/* ------------------------------------------------------------------ */
+/* Dessin des zones                                                    */
+/* ------------------------------------------------------------------ */
+let fond = null;   // copie de l'image sans les cadres
+
+function peindre() {
+  if (!cadre) return;
+  // On garde une copie propre du cadre avant d'y superposer les rectangles.
+  // `geler()` remet ce drapeau à zéro dès qu'une nouvelle image est extraite.
+  if (!peindre._gele) {
+    fond = document.createElement('canvas');
+    fond.width = toile.width; fond.height = toile.height;
+    fond.getContext('2d').drawImage(toile, 0, 0);
+    peindre._gele = true;
+  }
+
+  ctx.clearRect(0, 0, toile.width, toile.height);
+  ctx.drawImage(fond, 0, 0);
+
+  const echelle = Math.max(1, toile.width / 900);
+  zones.forEach((z, n) => {
+    const recadrage = segMethode.valeur === 'crop';
+
+    if (recadrage) {
+      // On assombrit tout ce qui sera coupé.
+      ctx.fillStyle = 'rgba(11,26,23,.66)';
+      ctx.fillRect(0, 0, toile.width, z.y);
+      ctx.fillRect(0, z.y + z.h, toile.width, toile.height - z.y - z.h);
+      ctx.fillRect(0, z.y, z.x, z.h);
+      ctx.fillRect(z.x + z.w, z.y, toile.width - z.x - z.w, z.h);
+    } else {
+      ctx.fillStyle = 'rgba(242,183,5,.16)';
+      ctx.fillRect(z.x, z.y, z.w, z.h);
+    }
+
+    ctx.strokeStyle = '#F2B705';
+    ctx.lineWidth = 2 * echelle;
+    ctx.setLineDash(recadrage ? [] : [8 * echelle, 5 * echelle]);
+    ctx.strokeRect(z.x, z.y, z.w, z.h);
+    ctx.setLineDash([]);
+
+    if (!recadrage) {
+      const t = 20 * echelle;
+      ctx.fillStyle = '#F2B705';
+      ctx.fillRect(z.x, z.y - t, t, t);
+      ctx.fillStyle = '#12241F';
+      ctx.font = `600 ${13 * echelle}px ui-monospace, monospace`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(n + 1), z.x + t / 2, z.y - t / 2);
+    }
+  });
+
+  $('#btnApercu').disabled = !zones.length || occupe;
+  $('#btnAnnuler').disabled = !zones.length || occupe;
+  $('#btnGo').disabled = !zones.length || occupe;
+  $('#btnGo2').disabled = !zones.length || occupe;
+}
+
+/* ---- Souris / tactile ---- */
+let trace = null;
+
+const versVideo = (e) => {
+  const r = toile.getBoundingClientRect();
+  return {
+    x: Math.round((e.clientX - r.left) * (toile.width / r.width)),
+    y: Math.round((e.clientY - r.top) * (toile.height / r.height)),
+  };
+};
+
+toile.addEventListener('pointerdown', (e) => {
+  if (!cadre || occupe) return;
+  // La capture garde le tracé vivant si la souris sort du cadre ; certains
+  // navigateurs la refusent, ce n'est pas une raison pour perdre le geste.
+  try { toile.setPointerCapture(e.pointerId); } catch (_) {}
+  const p = versVideo(e);
+  trace = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+});
+
+toile.addEventListener('pointermove', (e) => {
+  if (!trace) return;
+  const p = versVideo(e);
+  trace.x1 = p.x; trace.y1 = p.y;
+  apercuTrace();
+});
+
+toile.addEventListener('pointerup', () => {
+  if (!trace) return;
+  const z = normaliser(trace);
+  trace = null;
+  if (z.w < 8 || z.h < 8) { peindre(); return; }   // clic accidentel
+
+  if (segMethode.valeur === 'crop') zones = [z];
+  else zones.push(z);
+
+  peindre(); majZones();
+});
+
+function normaliser(t) {
+  const x = Math.max(0, Math.min(t.x0, t.x1));
+  const y = Math.max(0, Math.min(t.y0, t.y1));
+  const w = Math.min(toile.width - x, Math.abs(t.x1 - t.x0));
+  const h = Math.min(toile.height - y, Math.abs(t.y1 - t.y0));
+  // Tout est ramené à des nombres pairs : H.264 refuse les dimensions impaires.
+  const pair = (n) => Math.max(0, Math.floor(n / 2) * 2);
+  return { x: pair(x), y: pair(y), w: pair(w), h: pair(h) };
+}
+
+function apercuTrace() {
+  peindre();
+  const z = normaliser(trace);
+  const echelle = Math.max(1, toile.width / 900);
+  ctx.strokeStyle = '#5FD3B8';
+  ctx.lineWidth = 2 * echelle;
+  ctx.setLineDash([6 * echelle, 4 * echelle]);
+  ctx.strokeRect(z.x, z.y, z.w, z.h);
+  ctx.setLineDash([]);
+}
+
+$('#btnAnnuler').addEventListener('click', () => { zones.pop(); peindre(); majZones(); });
+$('#btnZonesOff').addEventListener('click', () => { zones = []; peindre(); majZones(); });
+
+function majZones() {
+  $('#btnZonesOff').hidden = !zones.length;
+  $('#listeZones').innerHTML = zones.map((z, n) => `
+    <li class="zone">
+      <span class="pastille">${n + 1}</span>
+      <span class="co">${z.w} × ${z.h} px — à ${z.x}, ${z.y}</span>
+      <button class="btn btn-mini" data-n="${n}">Retirer</button>
+    </li>`).join('');
+}
+
+$('#listeZones').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-n]');
+  if (!b) return;
+  zones.splice(+b.dataset.n, 1);
+  peindre(); majZones();
+});
+
+/* ------------------------------------------------------------------ */
+/* Construction du filtre                                              */
+/* ------------------------------------------------------------------ */
+const CRF = { haute: 18, standard: 22, legere: 28 };
+
+/** Ramène une zone à l'intérieur de l'image, en dimensions paires. */
+function border(z) {
+  const pair = (n) => Math.max(2, Math.floor(n / 2) * 2);
+  const x = Math.max(0, Math.min(z.x, dims.l - 4));
+  const y = Math.max(0, Math.min(z.y, dims.h - 4));
+  return { x, y, w: pair(Math.min(z.w, dims.l - x)), h: pair(Math.min(z.h, dims.h - y)) };
+}
+
+/**
+ * @returns {{drapeau:string, valeur:string, etiquette:string|null}}
+ *   drapeau : '-vf' ou '-filter_complex'
+ *   etiquette : label de sortie à mapper, ou null
+ */
+function filtre() {
+  const methode = segMethode.valeur;
+  const resol = +$('#fResol').value;
+  const echelle = resol ? `scale=-2:${resol}` : '';
+
+  if (methode === 'crop') {
+    const z = border(zones[0]);
+    const chaine = [`crop=${z.w}:${z.h}:${z.x}:${z.y}`, echelle].filter(Boolean).join(',');
+    return { drapeau: '-vf', valeur: chaine, etiquette: null };
+  }
+
+  if (methode === 'delogo') {
+    const chaine = zones
+      .map(border)
+      // delogo a besoin d'une bande de pixels autour : on garde le cadre
+      // au moins à 1 px des bords.
+      .map((z) => {
+        const x = Math.max(1, Math.min(z.x, dims.l - z.w - 1));
+        const y = Math.max(1, Math.min(z.y, dims.h - z.h - 1));
+        return `delogo=x=${x}:y=${y}:w=${z.w}:h=${z.h}`;
+      })
+      .concat(echelle ? [echelle] : [])
+      .join(',');
+    return { drapeau: '-vf', valeur: chaine, etiquette: null };
+  }
+
+  /* Flou et pixelisation : chaque zone est découpée, transformée, puis
+     recollée par-dessus l'image. Il faut donc un filtre complexe. */
+  const force = +$('#fForce').value;
+  const n = zones.length;
+  const morceaux = [];
+  const etiquettes = ['bg', ...Array.from({ length: n }, (_, k) => 's' + k)];
+
+  morceaux.push(`[0:v]split=${n + 1}${etiquettes.map((e) => `[${e}]`).join('')}`);
+
+  zones.map(border).forEach((z, k) => {
+    let transfo;
+    if (methode === 'flou') {
+      // boxblur applique le même rayon à la luminance et à la chrominance.
+      // En 4:2:0 les plans de chrominance font la moitié de la taille : le
+      // rayon doit donc tenir dans un quart du plus petit côté, pas la moitié.
+      const rayon = Math.max(1, Math.min(force, Math.floor(Math.min(z.w, z.h) / 4) - 1));
+      transfo = `boxblur=${rayon}:2`;
+    } else {
+      const pas = Math.max(2, Math.round(force / 2));
+      const pw = Math.max(1, Math.round(z.w / pas));
+      const ph = Math.max(1, Math.round(z.h / pas));
+      transfo = `scale=${pw}:${ph},scale=${z.w}:${z.h}:flags=neighbor`;
+    }
+    morceaux.push(`[s${k}]crop=${z.w}:${z.h}:${z.x}:${z.y},${transfo}[f${k}]`);
+  });
+
+  let courant = 'bg';
+  zones.map(border).forEach((z, k) => {
+    const suivant = k === n - 1 && !echelle ? 'out' : 'o' + k;
+    morceaux.push(`[${courant}][f${k}]overlay=${z.x}:${z.y}[${suivant}]`);
+    courant = suivant;
+  });
+  if (echelle) {
+    morceaux.push(`[${courant}]${echelle}[out]`);
+    courant = 'out';
+  }
+
+  return { drapeau: '-filter_complex', valeur: morceaux.join(';'), etiquette: courant };
+}
+
+/* ------------------------------------------------------------------ */
+/* Aperçu sur une image                                                */
+/* ------------------------------------------------------------------ */
+$('#btnApercu').addEventListener('click', async () => {
+  if (!zones.length || occupe) return;
+  const t = +$('#fTemps').value;
+
+  occuper('Calcul de l’aperçu…');
+  try {
+    await preparerMoteur();
+    if (!infos) infos = await analyser(video);
+    const obstacle = obstacleVideo(infos);
+    if (obstacle) throw new Error(obstacle);
+
+    const f = filtre();
+    const nomEntree = 'e.' + (ext(video.name) || 'bin');
+    const args = ['-ss', versHorodate(t), '-i', nomEntree, f.drapeau, f.valeur];
+    if (f.etiquette) args.push('-map', `[${f.etiquette}]`);
+    args.push('-frames:v', '1', '-q:v', '3', '-y', 'a.jpg');
+
+    jrn.ecrire('aperçu · ffmpeg ' + args.join(' '));
+
+    const donnees = await executer({
+      entrees: [{ nom: nomEntree, donnees: video }],
+      args, sortie: 'a.jpg',
+      surJournal: (l) => { if (/error|invalid|failed/i.test(l)) jrn.ecrire(l); },
+    });
+
+    // « Avant » : l'image de référence telle qu'affichée, sans les cadres.
+    $('#imgAvant').src = fond.toDataURL('image/jpeg', 0.85);
+    if ($('#imgApres').dataset.url) URL.revokeObjectURL($('#imgApres').dataset.url);
+    const url = URL.createObjectURL(versBlob(donnees, 'jpg'));
+    $('#imgApres').dataset.url = url;
+    $('#imgApres').src = url;
+    $('#duoApercu').hidden = false;
+  } catch (e) {
+    rater("L'aperçu a échoué : " + e.message);
+    jrn.ecrire('aperçu ÉCHEC — ' + e.message);
+  } finally {
+    liberer();
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Rendu complet                                                       */
+/* ------------------------------------------------------------------ */
+[$('#btnGo'), $('#btnGo2')].forEach((b) => b.addEventListener('click', rendre));
+
+async function rendre() {
+  if (!zones.length || occupe) return;
+
+  occuper('Rendu de la vidéo…');
+  verrouFermeture(true);
+  $('#barreRendu').hidden = false;
+  $('#jaugeRendu').style.width = '0%';
+
+  try {
+    await preparerMoteur();
+    if (!infos) infos = await analyser(video);
+
+    // Gomme réencode forcément l'image : un codec non décodable est bloquant.
+    const obstacle = obstacleVideo(infos);
+    if (obstacle) throw new Error(obstacle);
+
+    const f = filtre();
+    const nomEntree = 'e.' + (ext(video.name) || 'bin');
+    const args = ['-i', nomEntree, f.drapeau, f.valeur];
+    if (f.etiquette) args.push('-map', `[${f.etiquette}]`);
+    else args.push('-map', '0:v:0');
+
+    const avecSon = $('#optSon').checked && !!infos.codecAudio;
+    if (avecSon) {
+      args.push('-map', '0:a:0');
+      // La recopie n'est possible que si le codec tient dans un MP4.
+      if (['aac', 'mp3'].includes(infos.codecAudio)) args.push('-c:a', 'copy');
+      else args.push('-c:a', 'aac', '-b:a', '160k');
+    } else {
+      args.push('-an');
+    }
+
+    args.push('-c:v', 'libx264', '-crf', String(CRF[segQualite.valeur]),
+              '-preset', 'veryfast', '-pix_fmt', 'yuv420p',
+              '-movflags', '+faststart', '-y', 's.mp4');
+
+    jrn.ecrire('rendu · ffmpeg ' + args.join(' '));
+
+    const donnees = await executer({
+      entrees: [{ nom: nomEntree, donnees: video }],
+      args, sortie: 's.mp4', duree: infos.duree,
+      surProgression: (p) => {
+        $('#jaugeRendu').style.width = (p * 100) + '%';
+        $('#voile').textContent = `Rendu de la vidéo… ${Math.round(p * 100)} %`;
+      },
+      surJournal: (l) => { if (/error|invalid|failed|no such/i.test(l)) jrn.ecrire(l); },
+    });
+
+    const blob = versBlob(donnees, 'mp4');
+    const nom = sansExtension(video.name) + ' - nettoye.mp4';
+    sortie = { blob, nom };
+
+    $('#resNom').textContent = nom;
+    $('#resSub').textContent =
+      `${poids(blob.size)} · ${zones.length} zone${zones.length > 1 ? 's' : ''} · ` +
+      `${segMethode.valeur === 'crop' ? 'recadrage' : segMethode.valeur}`;
+    $('#resultat').hidden = false;
+    jrn.ecrire(`[${nom}] ${poids(blob.size)} — terminé`);
+    bravo('Vidéo prête.');
+  } catch (e) {
+    rater('Le rendu a échoué : ' + e.message);
+    jrn.ecrire('rendu ÉCHEC — ' + e.message);
+  } finally {
+    verrouFermeture(false);
+    $('#barreRendu').hidden = true;
+    liberer();
+  }
+}
+
+$('#btnEnregistrer').addEventListener('click', () => {
+  if (sortie) telecharger(sortie.blob, sortie.nom);
+});
+
+/* ------------------------------------------------------------------ */
+/* Voile d'occupation                                                  */
+/* ------------------------------------------------------------------ */
+function occuper(texte) {
+  occupe = true;
+  voiler(texte);
+  ['btnApercu','btnGo','btnGo2','btnAnnuler','btnAutre'].forEach((id) => { $('#' + id).disabled = true; });
+}
+function liberer() {
+  occupe = false;
+  devoiler();
+  $('#btnAutre').disabled = false;
+  peindre();
+}
+function voiler(texte) { $('#voile').hidden = false; $('#voile').textContent = texte; }
+function devoiler() { $('#voile').hidden = true; }
+
+/* ------------------------------------------------------------------ */
+/* Moteur                                                              */
+/* ------------------------------------------------------------------ */
+let moteurPret = false;
+
+async function preparerMoteur() {
+  if (moteurPret) return;
+  $('#spinMoteur').hidden = false;
+  await charger((etape) => { $('#txtMoteur').textContent = etape; });
+  moteurPret = true;
+  $('#spinMoteur').hidden = true;
+  $('#etatMoteur').classList.add('pret');
+  $('#txtMoteur').textContent =
+    `Moteur prêt (${multiCoeurs() ? 'multi-cœurs' : 'mono-cœur'}). Traitement local.`;
+}
+
+$('#piedInfo').textContent = multiCoeurs()
+  ? 'Moteur multi-cœurs disponible'
+  : 'Moteur mono-cœur — le rendu prendra environ la durée de la vidéo';
+</script>
+
+</body>
+</html>

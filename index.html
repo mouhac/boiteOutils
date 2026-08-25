@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>L'Atelier — boîte à outils</title>
+<meta name="description" content="Une boîte à outils qui tourne entièrement dans votre navigateur : assembler des PDF, extraire le son d'une vidéo, convertir des formats, effacer un texte dans une vidéo, frapper des QR codes. Aucun fichier n'est envoyé sur un serveur.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><rect width='40' height='40' rx='6' fill='%2316302A'/><path d='M8 14h24v18a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V14z' fill='%23F2B705'/><path d='M15 14V11a5 5 0 0 1 10 0v3' stroke='%23F2B705' stroke-width='2.6' fill='none'/><rect x='17' y='20' width='6' height='6' rx='1' fill='%2316302A'/></svg>">
+<link rel="stylesheet" href="atelier/atelier.css">
+<style>
+  .accueil{
+    padding:0 0 60px;
+    background-color:var(--tapis);
+    background-image:
+      linear-gradient(var(--grille) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grille) 1px,transparent 1px),
+      linear-gradient(var(--grille-2) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grille-2) 1px,transparent 1px);
+    background-size:12px 12px,12px 12px,60px 60px,60px 60px;
+    background-position:-1px -1px,-1px -1px,-1px -1px,-1px -1px;
+    min-height:calc(100vh - 60px);
+  }
+  .dedans{max-width:1180px;margin:0 auto;padding:0 24px}
+
+  /* ---------- Ouverture ---------- */
+  .ouverture{padding:56px 0 18px;max-width:60ch}
+  .ouverture .kicker{
+    font-family:var(--mono);font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--reglet);margin:0 0 14px;
+  }
+  .ouverture h2{
+    margin:0 0 14px;font-size:clamp(30px,4.6vw,46px);line-height:1.08;
+    letter-spacing:-.025em;font-weight:700;
+  }
+  .ouverture h2 em{font-style:normal;color:var(--reglet)}
+  .ouverture p{margin:0;font-size:16px;line-height:1.6;color:var(--craie-2)}
+
+  .sceau{
+    display:inline-flex;align-items:center;gap:9px;margin-top:22px;
+    border:1px solid rgba(95,211,184,.35);background:rgba(95,211,184,.08);
+    border-radius:var(--r);padding:9px 14px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.07em;color:var(--repere);
+  }
+  .sceau svg{width:15px;height:15px;flex:none}
+
+  /* ---------- Rayons ---------- */
+  .rayon{margin-top:44px}
+  .rayon-tete{
+    display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+    padding-bottom:10px;border-bottom:1px solid var(--trait);margin-bottom:18px;
+  }
+  .rayon-tete h3{
+    margin:0;font-family:var(--mono);font-size:12px;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--craie);font-weight:600;
+  }
+  .rayon-tete span{font-size:12.5px;color:var(--craie-3)}
+
+  .etagere{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(288px,1fr));gap:14px;
+    list-style:none;margin:0;padding:0;
+  }
+
+  /* ---------- Fiches d'outil ---------- */
+  .fiche{
+    position:relative;display:flex;flex-direction:column;gap:10px;
+    background:var(--tapis-2);border:1px solid var(--trait);border-radius:5px;
+    padding:18px 18px 17px;text-decoration:none;color:inherit;
+    transition:border-color .16s,background .16s,transform .16s;
+  }
+  a.fiche:hover{
+    border-color:var(--reglet);background:rgba(242,183,5,.07);transform:translateY(-2px);
+  }
+  a.fiche:focus-visible{outline:2px solid var(--reglet);outline-offset:3px}
+  .fiche.dort{opacity:.52}
+
+  .fiche-tete{display:flex;align-items:flex-start;gap:12px}
+  .fiche .ico{width:26px;height:26px;flex:none;color:var(--reglet);margin-top:1px}
+  .fiche.dort .ico{color:var(--craie-3)}
+  .fiche h4{
+    margin:0;font-family:var(--mono);font-size:14px;font-weight:600;
+    letter-spacing:.1em;text-transform:uppercase;color:var(--craie);
+  }
+  .fiche .sous{margin:3px 0 0;font-size:13px;color:var(--craie-2);line-height:1.4}
+  .fiche .detail{margin:0;font-size:12.5px;line-height:1.5;color:var(--craie-3)}
+
+  .etat{
+    position:absolute;top:14px;right:14px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;
+    border:1px solid currentColor;border-radius:20px;padding:2px 8px;opacity:.85;
+  }
+
+  .fleche{
+    margin-top:auto;padding-top:6px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--reglet);display:flex;align-items:center;gap:7px;
+  }
+  a.fiche:hover .fleche{color:var(--reglet-2)}
+
+  /* ---------- Bandes d'information ---------- */
+  .notes{
+    margin-top:52px;display:grid;grid-template-columns:repeat(auto-fit,minmax(268px,1fr));gap:14px;
+  }
+  .note{
+    border:1px solid var(--trait);border-left:2px solid var(--repere);border-radius:var(--r);
+    background:rgba(11,26,23,.4);padding:16px 18px;
+  }
+  .note h5{
+    margin:0 0 7px;font-family:var(--mono);font-size:11px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--craie-2);font-weight:500;
+  }
+  .note p{margin:0;font-size:12.5px;line-height:1.55;color:var(--craie-3)}
+  .note code{
+    font-family:var(--mono);font-size:11.5px;color:var(--reglet);
+    background:rgba(242,183,5,.1);padding:1px 5px;border-radius:2px;
+  }
+
+  @media (max-width:640px){
+    .dedans{padding:0 16px}
+    .ouverture{padding:36px 0 10px}
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M5 14h30v19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V14z" fill="#F2B705"/>
+      <path d="M5 14h30v6H5z" fill="#FFD34D"/>
+      <path d="M14 14v-3.5A6 6 0 0 1 26 10.5V14" stroke="#F2B705" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+      <rect x="16.5" y="21" width="7" height="7" rx="1.2" fill="#16302A"/>
+      <rect x="18.6" y="23.1" width="2.8" height="2.8" rx=".6" fill="#5FD3B8"/>
+    </svg>
+    <div>
+      <h1>L'Atelier</h1>
+      <p>Boîte à outils — tout se passe dans votre navigateur</p>
+    </div>
+  </div>
+  <div class="readout" id="readout">…</div>
+  <a class="btn" href="compagnon/" >Compagnon</a>
+</header>
+
+<main class="accueil">
+  <div class="dedans">
+
+    <section class="ouverture">
+      <p class="kicker">Boîte à outils</p>
+      <h2>Les outils qu'on cherche toujours, <em>sans pubs et sans téléverser</em>.</h2>
+      <p>
+        Assembler un dossier PDF, extraire le son d'une vidéo, convertir un vocal WhatsApp,
+        effacer un logo incrusté, frapper un QR code présentable. Chaque outil tourne
+        entièrement dans cet onglet&nbsp;: vos fichiers ne quittent jamais votre ordinateur.
+      </p>
+      <div class="sceau">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3 4 6.5v5c0 4.6 3.2 8.7 8 9.5 4.8-.8 8-4.9 8-9.5v-5L12 3z"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        Aucun fichier n'est envoyé sur un serveur
+      </div>
+    </section>
+
+    <div id="rayons"></div>
+
+    <section class="notes">
+      <div class="note">
+        <h5>Le premier lancement est plus long</h5>
+        <p>
+          Les outils audio et vidéo téléchargent un moteur d'environ 32&nbsp;Mo au premier usage.
+          Ensuite il reste en cache&nbsp;: les fois suivantes, c'est immédiat.
+        </p>
+      </div>
+      <div class="note">
+        <h5>Pour les gros fichiers</h5>
+        <p>
+          Un onglet plafonne autour de 2&nbsp;Go de mémoire. Au-delà d'une vidéo d'une heure,
+          passez par le compagnon <code>compagnon/</code>, qui utilise le vrai ffmpeg de votre machine.
+        </p>
+      </div>
+      <div class="note">
+        <h5>Ça marche aussi hors connexion</h5>
+        <p>
+          Une fois la page visitée, la plupart des outils fonctionnent sans internet.
+          Le compagnon Python, lui, en a besoin&nbsp;: c'est lui qui télécharge.
+        </p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="pied">
+  <span><b>L'Atelier</b> — boîte à outils personnelle</span>
+  <span>Traitement local, aucun envoi</span>
+  <span id="pied-compte"></span>
+</footer>
+
+<script type="module">
+import { OUTILS, RAYONS, LIBELLE_ETAT, parRayon, parEtat } from './atelier/outils.js';
+
+const echapper = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function fiche(outil) {
+  const etat = LIBELLE_ETAT[outil.etat];
+  const cliquable = !!outil.href;
+  const balise = cliquable ? 'a' : 'div';
+  const attrs = cliquable ? ` href="${outil.href}"` : '';
+  const appel = outil.etat === 'atelier' ? 'Voir le mode d’emploi' : 'Ouvrir l’outil';
+
+  return `
+    <li>
+      <${balise} class="fiche${cliquable ? '' : ' dort'}"${attrs}>
+        <span class="etat" style="color:${etat.couleur}">${etat.texte}</span>
+        <div class="fiche-tete">
+          <span class="ico" aria-hidden="true">${outil.icone}</span>
+          <div>
+            <h4>${echapper(outil.nom)}</h4>
+            <p class="sous">${echapper(outil.sous)}</p>
+          </div>
+        </div>
+        <p class="detail">${echapper(outil.detail)}</p>
+        ${cliquable ? `<span class="fleche">${appel} <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>` : ''}
+      </${balise}>
+    </li>`;
+}
+
+document.getElementById('rayons').innerHTML = RAYONS.map((r) => {
+  const outils = parRayon(r.cle);
+  if (!outils.length) return '';
+  return `
+    <section class="rayon">
+      <div class="rayon-tete">
+        <h3>${echapper(r.nom)}</h3>
+        <span>${echapper(r.note)}</span>
+      </div>
+      <ul class="etagere">${outils.map(fiche).join('')}</ul>
+    </section>`;
+}).join('');
+
+const prets = parEtat('pret').length;
+document.getElementById('readout').innerHTML =
+  `<b>${prets}</b> outils prêts · <b>${OUTILS.length - prets}</b> en chantier`;
+document.getElementById('pied-compte').textContent =
+  `${OUTILS.length} outils au catalogue`;
+</script>
+
+</body>
+</html>

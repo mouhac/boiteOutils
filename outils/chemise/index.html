@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chemise — assembleur de dossiers PDF</title>
+<meta name="description" content="Assemblez photos, scans et PDF en un seul dossier PDF propre. Cartes d'identité à taille réelle, planches contact, recto/verso. Tout se passe dans votre navigateur.">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root{
+  --tapis:#16302A;
+  --tapis-2:#102420;
+  --tapis-3:#0B1A17;
+  --grille:rgba(255,255,255,.045);
+  --grille-2:rgba(255,255,255,.085);
+  --craie:#EFF6F1;
+  --craie-2:#B4CCC1;
+  --craie-3:#8FAEA1;
+  --reglet:#F2B705;
+  --reglet-2:#FFD34D;
+  --repere:#5FD3B8;
+  --rouge:#E5584D;
+  --papier:#FDFDFB;
+  --trait:rgba(255,255,255,.11);
+  --mono:'IBM Plex Mono',ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+  --sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  --r:3px;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--tapis-3);
+  color:var(--craie);
+  font-family:var(--sans);
+  font-size:14px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+::selection{background:var(--reglet);color:#12241F}
+
+/* ---------- Bandeau ---------- */
+.bar{
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+  padding:12px 20px;
+  background:var(--tapis-2);
+  border-bottom:1px solid var(--trait);
+  position:sticky;top:0;z-index:40;
+}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.mark{width:34px;height:34px;flex:none}
+.brand h1{
+  margin:0;font-family:var(--mono);font-weight:600;font-size:16px;
+  letter-spacing:.14em;text-transform:uppercase;
+}
+.brand p{margin:0;font-size:11px;color:var(--craie-3);letter-spacing:.02em}
+
+.readout{
+  font-family:var(--mono);font-size:11px;color:var(--craie-2);
+  border:1px solid var(--trait);border-radius:var(--r);
+  padding:6px 10px;white-space:nowrap;
+}
+.readout b{color:var(--reglet);font-weight:500}
+
+.btn{
+  border:1px solid var(--trait);background:transparent;color:var(--craie);
+  padding:8px 14px;border-radius:var(--r);cursor:pointer;
+  font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;
+  transition:background .15s,border-color .15s,color .15s;
+}
+.btn:hover{background:rgba(255,255,255,.06);border-color:var(--craie-3)}
+.btn:focus-visible{outline:2px solid var(--reglet);outline-offset:2px}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.btn-go{
+  background:var(--reglet);color:#12241F;border-color:var(--reglet);font-weight:600;
+}
+.btn-go:hover{background:var(--reglet-2);border-color:var(--reglet-2)}
+.btn-mini{
+  padding:5px 9px;font-size:10.5px;letter-spacing:.05em;
+}
+
+/* ---------- Structure ---------- */
+.shell{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 60px)}
+.panel{
+  background:var(--tapis-2);border-right:1px solid var(--trait);
+  padding:4px 0 40px;overflow:auto;
+}
+.mat{
+  padding:22px;
+  background-color:var(--tapis);
+  background-image:
+    linear-gradient(var(--grille) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grille) 1px,transparent 1px),
+    linear-gradient(var(--grille-2) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grille-2) 1px,transparent 1px);
+  background-size:12px 12px,12px 12px,60px 60px,60px 60px;
+  background-position:-1px -1px,-1px -1px,-1px -1px,-1px -1px;
+  min-width:0;
+}
+
+/* ---------- Réglages ---------- */
+.grp{border-bottom:1px solid var(--trait)}
+.grp>summary{
+  list-style:none;cursor:pointer;padding:13px 18px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--craie-2);display:flex;align-items:center;gap:8px;
+}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary::before{content:'+';color:var(--reglet);font-weight:600;width:10px}
+.grp[open]>summary::before{content:'–'}
+.grp>summary:hover{color:var(--craie)}
+.grp-body{padding:2px 18px 20px;display:flex;flex-direction:column;gap:16px}
+
+.field{display:flex;flex-direction:column;gap:7px}
+.field>label{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--craie-3);
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+}
+.field>label span{color:var(--reglet);letter-spacing:.04em}
+
+select,input[type=text],input[type=number]{
+  background:var(--tapis-3);border:1px solid var(--trait);border-radius:var(--r);
+  padding:8px 10px;font-size:13px;width:100%;
+}
+select:focus,input:focus{outline:none;border-color:var(--repere)}
+
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:20px;background:transparent;cursor:pointer;
+}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--trait)}
+input[type=range]::-moz-range-track{height:2px;background:var(--trait)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--reglet);margin-top:-5.5px;border:none;
+}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--reglet);border:none}
+input[type=range]:focus-visible{outline:2px solid var(--reglet);outline-offset:4px}
+
+/* modèles */
+.models{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.model{
+  border:1px solid var(--trait);border-radius:var(--r);padding:9px 8px 8px;
+  cursor:pointer;text-align:left;background:transparent;display:flex;flex-direction:column;gap:6px;
+  transition:border-color .15s,background .15s;
+}
+.model:hover{border-color:var(--craie-3)}
+.model.on{border-color:var(--reglet);background:rgba(242,183,5,.09)}
+.model:focus-visible{outline:2px solid var(--reglet);outline-offset:2px}
+.model .ico{display:block;height:26px}
+.model .nm{font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--craie-2);line-height:1.25}
+.model.on .nm{color:var(--craie)}
+
+.checks{display:flex;flex-direction:column;gap:10px}
+.chk{display:flex;gap:9px;align-items:flex-start;cursor:pointer;font-size:12.5px;color:var(--craie-2)}
+.chk input{
+  appearance:none;-webkit-appearance:none;width:15px;height:15px;flex:none;margin:2px 0 0;
+  border:1px solid var(--craie-3);border-radius:2px;background:var(--tapis-3);cursor:pointer;position:relative;
+}
+.chk input:checked{background:var(--reglet);border-color:var(--reglet)}
+.chk input:checked::after{
+  content:'';position:absolute;left:4.5px;top:1px;width:4px;height:8px;
+  border:solid #12241F;border-width:0 2px 2px 0;transform:rotate(45deg);
+}
+.chk input:focus-visible{outline:2px solid var(--reglet);outline-offset:2px}
+.chk:hover{color:var(--craie)}
+
+.seg{display:flex;border:1px solid var(--trait);border-radius:var(--r);overflow:hidden}
+.seg button{
+  flex:1;background:transparent;border:0;padding:7px 4px;cursor:pointer;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--craie-3);
+}
+.seg button+button{border-left:1px solid var(--trait)}
+.seg button.on{background:var(--reglet);color:#12241F;font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--reglet);outline-offset:-2px}
+
+.hint{font-size:11.5px;color:var(--craie-3);line-height:1.45;margin:0}
+
+/* ---------- Démarrage rapide ---------- */
+.quick{margin-bottom:20px}
+.quick-t{
+  margin:0 0 10px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--craie-2);font-weight:500;
+}
+.quick-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(206px,1fr));gap:10px}
+.qb{
+  text-align:left;background:var(--tapis-2);border:1px solid var(--trait);border-radius:var(--r);
+  padding:13px 15px;cursor:pointer;display:flex;gap:12px;align-items:flex-start;
+  transition:border-color .15s,background .15s;
+}
+.qb:hover{border-color:var(--reglet);background:rgba(242,183,5,.09)}
+.qb:focus-visible{outline:2px solid var(--reglet);outline-offset:2px}
+.qb .qi{flex:none;color:var(--reglet);margin-top:1px}
+.qb b{display:block;font-size:14px;font-weight:600;color:var(--craie);margin-bottom:3px}
+.qb span{display:block;font-size:12px;color:var(--craie-3);line-height:1.4}
+
+/* ---------- Dépôt ---------- */
+.drop{
+  border:2px dashed rgba(242,183,5,.42);border-radius:6px;
+  padding:38px 24px;text-align:center;cursor:pointer;
+  background:rgba(242,183,5,.045);transition:border-color .15s,background .15s;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.drop:hover,.drop.hot{border-color:var(--reglet);background:rgba(242,183,5,.11)}
+.drop:focus-visible{outline:3px solid var(--reglet);outline-offset:4px}
+.drop-ico{width:40px;height:40px;color:var(--reglet);opacity:.9}
+.drop-t{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;color:var(--craie)}
+.drop-s{margin:0;max-width:44ch;font-size:13.5px;line-height:1.5;color:var(--craie-2)}
+.fauxbtn{
+  display:inline-block;margin-top:4px;background:var(--reglet);color:#12241F;
+  padding:11px 22px;border-radius:4px;font-weight:600;font-size:14px;
+}
+.drop:hover .fauxbtn{background:var(--reglet-2)}
+.drop-f{margin:2px 0 0;font-family:var(--mono);font-size:11px;color:var(--craie-3);letter-spacing:.04em}
+
+/* ---------- Plateau de pièces ---------- */
+.section-head{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin:26px 0 12px;
+}
+.section-head h2{
+  margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--craie-2);font-weight:500;
+}
+.count{
+  font-family:var(--mono);font-size:10.5px;color:var(--tapis-3);background:var(--repere);
+  padding:1px 6px;border-radius:20px;font-weight:600;
+}
+.tools{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap}
+
+.grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:12px;
+  list-style:none;margin:0;padding:0;
+}
+.piece{
+  background:var(--tapis-2);border:1px solid var(--trait);border-radius:var(--r);
+  overflow:hidden;position:relative;
+}
+.piece.drag{opacity:.35}
+.piece .vue{
+  height:118px;display:flex;align-items:center;justify-content:center;
+  background:
+    repeating-conic-gradient(rgba(255,255,255,.035) 0% 25%,transparent 0% 50%) 50%/14px 14px;
+  overflow:hidden;cursor:grab;
+}
+.piece .vue img{max-width:100%;max-height:100%;display:block;box-shadow:0 2px 10px rgba(0,0,0,.45)}
+.piece .meta{padding:7px 8px;border-top:1px solid var(--trait)}
+.piece .nm{
+  font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--craie-2);
+}
+.piece .kind{font-family:var(--mono);font-size:9.5px;color:var(--craie-3);letter-spacing:.06em}
+.piece .acts{
+  position:absolute;top:5px;right:5px;display:flex;gap:4px;opacity:0;transition:opacity .15s;
+}
+.piece:hover .acts,.piece:focus-within .acts{opacity:1}
+.acts button{
+  width:24px;height:24px;border-radius:2px;border:1px solid var(--trait);
+  background:rgba(11,26,23,.88);color:var(--craie);cursor:pointer;
+  display:grid;place-items:center;padding:0;font-size:12px;line-height:1;
+}
+.acts button:hover{background:var(--reglet);color:#12241F;border-color:var(--reglet)}
+.acts button.del:hover{background:var(--rouge);color:#fff;border-color:var(--rouge)}
+.acts button:focus-visible{outline:2px solid var(--reglet);outline-offset:1px}
+.piece .rang{
+  position:absolute;top:5px;left:5px;font-family:var(--mono);font-size:10px;font-weight:600;
+  background:rgba(11,26,23,.85);color:var(--reglet);padding:2px 6px;border-radius:2px;
+}
+
+/* ---------- Aperçu ---------- */
+.regle{
+  height:22px;margin-bottom:10px;border-bottom:1px solid var(--trait);
+  background-image:
+    repeating-linear-gradient(90deg,var(--craie-3) 0 1px,transparent 1px 10px),
+    repeating-linear-gradient(90deg,var(--reglet) 0 1px,transparent 1px 50px);
+  background-size:100% 6px,100% 11px;
+  background-position:0 100%,0 100%;
+  background-repeat:no-repeat;
+  position:relative;opacity:.55;
+}
+.pages{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.page{
+  background:var(--papier);border-radius:1px;
+  box-shadow:0 1px 2px rgba(0,0,0,.35),0 14px 34px rgba(0,0,0,.4);
+  position:relative;
+}
+.page canvas{display:block;max-width:100%;height:auto;border-radius:1px}
+.page .no{
+  position:absolute;bottom:-19px;left:0;font-family:var(--mono);font-size:10px;color:var(--craie-3);
+  letter-spacing:.08em;
+}
+.vide{
+  border:1px solid var(--trait);border-radius:var(--r);padding:40px 24px;text-align:center;
+  color:var(--craie-3);background:rgba(11,26,23,.35);
+}
+.vide p{margin:0 0 4px;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--craie-2)}
+.vide small{font-size:11.5px}
+
+.charge{display:flex;align-items:center;gap:10px;color:var(--craie-2);font-family:var(--mono);font-size:11.5px;letter-spacing:.06em}
+.spin{
+  width:13px;height:13px;border:2px solid var(--trait);border-top-color:var(--reglet);
+  border-radius:50%;animation:t .7s linear infinite;flex:none;
+}
+@keyframes t{to{transform:rotate(360deg)}}
+
+/* ---------- Messages ---------- */
+.toast{
+  position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);
+  background:var(--tapis-2);border:1px solid var(--trait);border-left:3px solid var(--reglet);
+  padding:12px 18px;border-radius:var(--r);font-size:13px;max-width:min(92vw,460px);
+  box-shadow:0 18px 40px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:80;
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{border-left-color:var(--rouge)}
+.toast.ok{border-left-color:var(--repere)}
+
+/* ---------- Bas de page ---------- */
+.pied{
+  padding:16px 22px;border-top:1px solid var(--trait);background:var(--tapis-2);
+  font-size:11.5px;color:var(--craie-3);display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+}
+.pied b{color:var(--craie-2);font-weight:500}
+
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  .panel{border-right:0;border-bottom:1px solid var(--trait);order:2}
+  .mat{order:1;padding:16px}
+  .bar{padding:10px 14px}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+}
+.retour{display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:var(--craie-3);font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--trait);border-radius:var(--r);padding:7px 12px;transition:color .15s,border-color .15s}
+.retour:hover{color:var(--craie);border-color:var(--craie-3)}
+
+/* ---------- Téléphones : mêmes règles que le reste de l'atelier ---------- */
+@media (max-width:900px){
+  .bar{padding:9px 13px;gap:10px}
+  .brand p{display:none}
+  .brand h1{font-size:15px}
+  .mark{width:28px;height:28px}
+  .readout{font-size:10.5px;padding:5px 8px}
+  .retour{padding:9px 12px;font-size:10px;min-height:36px}
+
+  .btn{min-height:44px;padding:10px 16px}
+  .btn-mini{min-height:36px;padding:7px 11px}
+  .seg button{min-height:44px}
+  .grp>summary{padding:15px 18px;min-height:48px}
+  .model{min-height:56px}
+  .acts button{width:34px;height:34px;font-size:14px}
+
+  /* 16 px : en dessous, iOS zoome la page dès qu'on touche un champ. */
+  select,input[type=text],input[type=number]{
+    font-size:16px;min-height:44px;padding:10px 12px;
+  }
+  input[type=range]{height:34px}
+  input[type=range]::-webkit-slider-thumb{width:20px;height:20px;margin-top:-9px}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px}
+  .chk{font-size:13.5px;gap:11px;padding:3px 0}
+  .chk input{width:20px;height:20px;margin-top:0}
+  .chk input:checked::after{left:6px;top:2px;width:5px;height:10px}
+
+  .grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:9px}
+  .piece .vue{height:96px}
+  .piece .acts{opacity:1}
+  .quick-row{grid-template-columns:1fr}
+  .drop{padding:30px 18px}
+  .drop-t{font-size:18px}
+}
+@media (max-width:420px){
+  .models{grid-template-columns:1fr 1fr}
+  .bar{gap:8px;row-gap:8px}
+  .readout{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:10px;padding:5px 7px}
+  .btn{padding:10px 13px;font-size:11px}
+}
+@media (hover:none){ .piece .acts{opacity:1} }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M4 9h12l3 4h17v22a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9z" fill="#F2B705"/>
+      <path d="M4 15h32v20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V15z" fill="#FFD34D"/>
+      <rect x="11" y="21" width="18" height="11" rx="1.5" fill="#16302A"/>
+      <rect x="13.5" y="23.5" width="6" height="6" rx="1" fill="#5FD3B8"/>
+      <rect x="21.5" y="23.5" width="5.5" height="1.4" rx=".7" fill="#5FD3B8"/>
+      <rect x="21.5" y="26.4" width="5.5" height="1.4" rx=".7" fill="#5FD3B8" opacity=".6"/>
+    </svg>
+    <div>
+      <h1>Chemise</h1>
+      <p>Assembleur de dossiers PDF</p>
+    </div>
+  </div>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">Aucune pièce</div>
+  <button class="btn btn-go" id="exportBtn" disabled>Exporter le PDF</button>
+</header>
+
+<div class="shell">
+
+  <!-- ============ RÉGLAGES ============ -->
+  <aside class="panel">
+
+    <details class="grp" open>
+      <summary>Mise en page</summary>
+      <div class="grp-body">
+
+        <div class="field">
+          <label>Modèle</label>
+          <div class="models" id="models"></div>
+          <p class="hint" id="modelHint"></p>
+        </div>
+
+        <div class="field" id="fFormat">
+          <label for="format">Format de page</label>
+          <select id="format">
+            <option value="a4" selected>A4 — 210 × 297 mm</option>
+            <option value="a5">A5 — 148 × 210 mm</option>
+            <option value="a3">A3 — 297 × 420 mm</option>
+            <option value="letter">Letter — 216 × 279 mm</option>
+            <option value="legal">Legal — 216 × 356 mm</option>
+          </select>
+        </div>
+
+        <div class="field" id="fOrient">
+          <label>Orientation</label>
+          <div class="seg" id="orient">
+            <button data-v="portrait" class="on">Portrait</button>
+            <button data-v="paysage">Paysage</button>
+            <button data-v="auto">Auto</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="marge">Marges <span id="margeV">12 mm</span></label>
+          <input type="range" id="marge" min="0" max="40" step="1" value="12">
+        </div>
+
+        <div class="field" id="fGap">
+          <label for="ecart">Écart entre pièces <span id="ecartV">6 mm</span></label>
+          <input type="range" id="ecart" min="0" max="30" step="1" value="6">
+        </div>
+
+        <div class="field" id="fFit">
+          <label>Ajustement</label>
+          <div class="seg" id="fit">
+            <button data-v="contain" class="on">Pièce entière</button>
+            <button data-v="cover">Remplir (recadré)</button>
+          </div>
+        </div>
+
+        <div class="field" id="fPerPage" hidden>
+          <label>Cartes par page</label>
+          <div class="seg" id="perPage">
+            <button data-v="2" class="on">2</button>
+            <button data-v="4">4</button>
+            <button data-v="8">8</button>
+          </div>
+        </div>
+
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Habillage</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="titre">Titre en tête de page</label>
+          <input type="text" id="titre" placeholder="ex. Dossier — Diallo Fatou" maxlength="70">
+        </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optNum"><span>Numéroter les pages</span></label>
+          <label class="chk"><input type="checkbox" id="optLegende"><span>Légender chaque pièce avec son nom de fichier</span></label>
+          <label class="chk"><input type="checkbox" id="optBordure"><span>Filet fin autour de chaque pièce</span></label>
+          <label class="chk"><input type="checkbox" id="optCoupe" checked><span>Traits de coupe (mode carte)</span></label>
+          <label class="chk"><input type="checkbox" id="optGris"><span>Convertir en niveaux de gris</span></label>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Qualité &amp; export</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="dpi">Résolution</label>
+          <select id="dpi">
+            <option value="120">120 dpi — envoi WhatsApp, fichier léger</option>
+            <option value="200" selected>200 dpi — lecture écran &amp; e-mail</option>
+            <option value="300">300 dpi — impression, guichet officiel</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="qualite">Compression des images <span id="qualiteV">82 %</span></label>
+          <input type="range" id="qualite" min="45" max="97" step="1" value="82">
+          <p class="hint">Plus bas = fichier plus léger. 80 % suffit pour une pièce d'identité lisible.</p>
+        </div>
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optVecteur" checked><span>Garder les PDF importés en vectoriel quand c'est possible (texte net, poids réduit)</span></label>
+          <label class="chk"><input type="checkbox" id="optApercu" checked><span>Aperçu automatique</span></label>
+        </div>
+        <div class="field">
+          <label for="nomfic">Nom du fichier</label>
+          <input type="text" id="nomfic" value="dossier" maxlength="60">
+        </div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Confidentialité</summary>
+      <div class="grp-body">
+        <p class="hint">Vos fichiers ne quittent jamais l'appareil. Tout l'assemblage se fait dans le navigateur : aucun envoi vers un serveur, rien n'est stocké. Vous pouvez couper la connexion internet après le chargement de la page, l'outil continue de fonctionner.</p>
+      </div>
+    </details>
+  </aside>
+
+  <!-- ============ TAPIS ============ -->
+  <main class="mat">
+
+    <section class="quick">
+      <h2 class="quick-t">Que voulez-vous faire ?</h2>
+      <div class="quick-row" id="presets"></div>
+    </section>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des fichiers">
+      <svg class="drop-ico" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+        <path d="M24 33V9m0 0-9 9m9-9 9 9" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M7 30v7a4 4 0 0 0 4 4h26a4 4 0 0 0 4-4v-7" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+      </svg>
+      <h2 class="drop-t">Ajoutez vos photos, scans ou PDF</h2>
+      <p class="drop-s">Faites glisser les fichiers dans cette zone, ou cliquez pour les choisir sur votre appareil. Vous pouvez en prendre plusieurs à la fois.</p>
+      <span class="fauxbtn">Choisir mes fichiers</span>
+      <p class="drop-f">JPG · PNG · WEBP · PDF</p>
+    </div>
+    <input type="file" id="picker" multiple accept="image/*,application/pdf" hidden>
+
+    <div class="section-head" id="trayHead" hidden>
+      <h2>Pièces du dossier</h2>
+      <span class="count" id="count">0</span>
+      <div class="tools">
+        <button class="btn btn-mini" id="sortName">Trier A→Z</button>
+        <button class="btn btn-mini" id="reverse">Inverser</button>
+        <button class="btn btn-mini" id="rotAll">Tout pivoter</button>
+        <button class="btn btn-mini" id="clear">Tout retirer</button>
+      </div>
+    </div>
+    <ul class="grid" id="grid"></ul>
+
+    <div class="section-head">
+      <h2>Aperçu du PDF</h2>
+      <div class="tools"><button class="btn btn-mini" id="refresh">Rafraîchir</button></div>
+    </div>
+    <div class="regle" aria-hidden="true"></div>
+    <div id="apercu">
+      <div class="vide">
+        <p>Rien à montrer pour l'instant</p>
+        <small>Dès que vous ajoutez un fichier, le PDF fini s'affiche ici, page par page.</small>
+      </div>
+    </div>
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Chemise</b> — assemblage local, aucun envoi de fichier.</span>
+  <span>Carte d'identité au format réel : <b>85,6 × 54 mm</b> (norme ISO CR80).</span>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ============================================================
+   Constantes
+   ============================================================ */
+const MM = 2.834645669;                 // points par millimètre
+const CARD_W = 85.6 * MM;               // 242,65 pt
+const CARD_H = 54   * MM;               // 153,07 pt
+const FORMATS = {
+  a4:[595.276,841.890], a5:[419.528,595.276], a3:[841.890,1190.551],
+  letter:[612,792], legal:[612,1008]
+};
+const GRIDS = { '1':[1,1], '2':[1,2], '4':[2,2], '6':[2,3], '9':[3,3] };
+
+const MODELS = [
+  {v:'1',  nm:'1 par page',      hint:"Une pièce par page, centrée dans le format choisi. Le réglage le plus courant pour un dossier administratif.", ico:g=>cell(1,1)},
+  {v:'2',  nm:'2 par page',      hint:"Deux pièces empilées : le réglage recto/verso. Idéal pour une carte d'identité scannée en deux images.", ico:g=>cell(1,2)},
+  {v:'id', nm:'Carte réelle',    hint:"Cartes imprimées à leur taille physique exacte (85,6 × 54 mm), avec traits de coupe. Pour CNI, permis, carte grise, badge.", ico:g=>cardIco()},
+  {v:'4',  nm:'4 par page',      hint:"Quatre pièces par page. Bon compromis entre lisibilité et nombre de pages.", ico:g=>cell(2,2)},
+  {v:'6',  nm:'6 par page',      hint:"Planche de six. Pour un récapitulatif de photos ou de justificatifs.", ico:g=>cell(2,3)},
+  {v:'9',  nm:'9 par page',      hint:"Planche contact dense : neuf vignettes par page.", ico:g=>cell(3,3)},
+  {v:'auto',nm:'Page = pièce',   hint:"Chaque page prend exactement les dimensions de la pièce : aucune marge blanche, aucun recadrage. Le format et l'orientation sont ignorés.", ico:g=>autoIco()}
+];
+
+function cell(c,r){
+  let s='<svg class="ico" viewBox="0 0 40 26" fill="none">';
+  s+='<rect x=".5" y=".5" width="39" height="25" rx="1" stroke="currentColor" stroke-opacity=".35"/>';
+  const pad=4, gw=(40-pad*2-(c-1)*2)/c, gh=(26-pad*2-(r-1)*2)/r;
+  for(let i=0;i<r;i++)for(let j=0;j<c;j++)
+    s+=`<rect x="${pad+j*(gw+2)}" y="${pad+i*(gh+2)}" width="${gw}" height="${gh}" rx=".5" fill="currentColor" fill-opacity=".55"/>`;
+  return s+'</svg>';
+}
+function cardIco(){
+  return '<svg class="ico" viewBox="0 0 40 26" fill="none">'+
+  '<rect x=".5" y=".5" width="39" height="25" rx="1" stroke="currentColor" stroke-opacity=".35"/>'+
+  '<rect x="8" y="4" width="24" height="8" rx="1" fill="currentColor" fill-opacity=".55"/>'+
+  '<rect x="8" y="14" width="24" height="8" rx="1" fill="currentColor" fill-opacity=".55"/>'+
+  '<path d="M6 2.5v3M6 20.5v3M34 2.5v3M34 20.5v3" stroke="#5FD3B8" stroke-width="1"/></svg>';
+}
+function autoIco(){
+  return '<svg class="ico" viewBox="0 0 40 26" fill="none">'+
+  '<rect x="3" y="2" width="14" height="22" rx="1" fill="currentColor" fill-opacity=".55"/>'+
+  '<rect x="20" y="7" width="17" height="12" rx="1" fill="currentColor" fill-opacity=".55"/></svg>';
+}
+
+/* ============================================================
+   État
+   ============================================================ */
+const S = {
+  items:[], seq:0, layout:'1', format:'a4', orient:'portrait',
+  marge:12, ecart:6, fit:'contain', perPage:2,
+  titre:'', num:false, legende:false, bordure:false, coupe:true, gris:false,
+  dpi:200, qualite:.82, vecteur:true, apercu:true, nomfic:'dossier'
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* ============================================================
+   Messages
+   ============================================================ */
+let toastT;
+function say(msg, kind){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'toast on' + (kind ? ' '+kind : '');
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>{ t.className='toast'; }, kind==='err' ? 6500 : 3800);
+}
+
+/* ============================================================
+   Bibliothèques
+   ============================================================ */
+if (window.pdfjsLib) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+function libsReady(){
+  return !!(window.PDFLib && window.pdfjsLib);
+}
+
+/* ============================================================
+   Import de fichiers
+   ============================================================ */
+async function addFiles(list){
+  if (!libsReady()){ say("Les modules ne sont pas encore chargés. Attendez une seconde et réessayez.", 'err'); return; }
+  const files = Array.from(list||[]);
+  if (!files.length) return;
+  let ko = 0, koName = '';
+
+  for (const f of files){
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    try{
+      if (isPdf) await addPdf(f);
+      else if (f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|avif)$/i.test(f.name)) await addImage(f);
+      else { ko++; koName = f.name; }
+    }catch(e){
+      console.error(e); ko++; koName = f.name;
+    }
+  }
+
+  if (ko) say(ko===1
+      ? `« ${koName} » n'a pas pu être lu. Les formats HEIC et RAW ne sont pas gérés par le navigateur : convertissez-les en JPG.`
+      : `${ko} fichiers n'ont pas pu être lus. Convertissez les HEIC/RAW en JPG avant de les déposer.`, 'err');
+
+  render(); schedule();
+}
+
+function loadImg(url){
+  return new Promise((res,rej)=>{
+    const im = new Image();
+    im.onload = ()=>res(im);
+    im.onerror = ()=>rej(new Error('image illisible'));
+    im.src = url;
+  });
+}
+
+async function addImage(f){
+  const url = URL.createObjectURL(f);
+  const el = await loadImg(url);
+  S.items.push({
+    id:'i'+(++S.seq), kind:'image', name:f.name, el, thumb:url,
+    w:el.naturalWidth, h:el.naturalHeight, rot:0, cache:null
+  });
+}
+
+async function addPdf(f){
+  const buf = await f.arrayBuffer();
+  const forJs  = new Uint8Array(buf.slice(0));
+  const forLib = new Uint8Array(buf.slice(0));
+  const doc = await pdfjsLib.getDocument({data:forJs}).promise;
+  const n = doc.numPages;
+  const base = f.name.replace(/\.pdf$/i,'');
+  for (let p=1; p<=n; p++){
+    const page = await doc.getPage(p);
+    const vp1 = page.getViewport({scale:1});
+    const it = {
+      id:'i'+(++S.seq), kind:'pdf', name: n>1 ? `${base} — p.${p}` : f.name,
+      pdfDoc:doc, pageNum:p, srcBytes:forLib, srcId:f.name+'|'+f.size+'|'+f.lastModified,
+      w:Math.round(vp1.width), h:Math.round(vp1.height), rot:0, cache:null,
+      thumb: await thumbOfPdfPage(page)
+    };
+    S.items.push(it);
+  }
+}
+
+async function thumbOfPdfPage(page){
+  const vp1 = page.getViewport({scale:1});
+  const scale = Math.min(1.6, 240 / Math.max(vp1.width, vp1.height) * 1.6);
+  const vp = page.getViewport({scale: Math.max(.25, scale)});
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(vp.width));
+  c.height = Math.max(1, Math.round(vp.height));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height);
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  return c.toDataURL('image/jpeg', .72);
+}
+
+/* ============================================================
+   Rendu de la liste
+   ============================================================ */
+function render(){
+  const grid = $('#grid');
+  grid.innerHTML = '';
+  const has = S.items.length > 0;
+  $('#trayHead').hidden = !has;
+  $('#count').textContent = S.items.length;
+  $('#exportBtn').disabled = !has;
+
+  S.items.forEach((it,i)=>{
+    const li = document.createElement('li');
+    li.className = 'piece'; li.dataset.id = it.id;
+    li.innerHTML =
+      `<div class="vue"><img src="${it.thumb}" alt="" style="transform:rotate(${it.rot}deg)"></div>
+       <span class="rang">${String(i+1).padStart(2,'0')}</span>
+       <div class="acts">
+         <button data-a="rot" title="Pivoter" aria-label="Pivoter">⟳</button>
+         <button data-a="dup" title="Dupliquer" aria-label="Dupliquer">⧉</button>
+         <button data-a="del" class="del" title="Retirer" aria-label="Retirer">✕</button>
+       </div>
+       <div class="meta">
+         <div class="nm" title="${esc(it.name)}">${esc(it.name)}</div>
+         <div class="kind">${it.kind==='pdf'?'PDF':'IMG'} · ${it.w}×${it.h}${it.rot?' · '+it.rot+'°':''}</div>
+       </div>`;
+    grid.appendChild(li);
+  });
+  updateReadout();
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function updateReadout(){
+  const n = S.items.length;
+  if (!n){ $('#readout').innerHTML = 'Aucune pièce'; return; }
+  const pages = estimatePages();
+  const m = MODELS.find(m=>m.v===S.layout);
+  $('#readout').innerHTML =
+    `<b>${n}</b> pièce${n>1?'s':''} · <b>${pages}</b> page${pages>1?'s':''} · ${m.nm} · ${S.layout==='auto'?'format auto':S.format.toUpperCase()}`;
+}
+function estimatePages(){
+  const n = S.items.length;
+  if (!n) return 0;
+  if (S.layout==='auto' || S.layout==='1') return n;
+  if (S.layout==='id') return Math.ceil(n / S.perPage);
+  const [c,r] = GRIDS[S.layout];
+  return Math.ceil(n / (c*r));
+}
+
+/* ============================================================
+   Rastérisation
+   ============================================================ */
+async function sourceCanvas(it, needPx){
+  if (it.kind === 'image') return it.el;
+  const target = Math.max(240, needPx||900);
+  const page = await it.pdfDoc.getPage(it.pageNum);
+  const vp1 = page.getViewport({scale:1});
+  const scale = Math.min(4, Math.max(.35, target / Math.max(vp1.width, vp1.height)));
+  const vp = page.getViewport({scale});
+  const c = document.createElement('canvas');
+  c.width = Math.max(1,Math.round(vp.width));
+  c.height = Math.max(1,Math.round(vp.height));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+  await page.render({canvasContext:ctx, viewport:vp}).promise;
+  return c;
+}
+
+function dims(x){ return { w: x.naturalWidth || x.width, h: x.naturalHeight || x.height }; }
+
+async function rotatedCanvas(it, needPx){
+  const r = ((it.rot%360)+360)%360;
+  if (it.kind === 'image' && r === 0) return it.el;      // aucune copie inutile
+  const bucket = Math.ceil((needPx||600)/300)*300;
+  if (it.cache && it.cache.k === r+'|'+bucket) return it.cache.c;
+  const src = await sourceCanvas(it, bucket);
+  const d = dims(src), sw = d.w, sh = d.h;
+  const swap = (r===90 || r===270);
+  const c = document.createElement('canvas');
+  c.width = swap ? sh : sw; c.height = swap ? sw : sh;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height);
+  ctx.save();
+  ctx.translate(c.width/2, c.height/2);
+  ctx.rotate(r * Math.PI/180);
+  ctx.drawImage(src, -sw/2, -sh/2, sw, sh);
+  ctx.restore();
+  it.cache = {k: r+'|'+bucket, c};
+  return c;
+}
+
+/**
+ * Prépare une pièce pour une cellule donnée (en points).
+ * Retourne {url, w, h} : image JPEG en data-URL + dimensions de tracé en points.
+ */
+async function prepare(it, cellW, cellH, dpi, quality, fit, gris){
+  const needPx = Math.ceil(Math.max(cellW, cellH) / 72 * dpi);
+  const rc = await rotatedCanvas(it, needPx);
+  const rd = dims(rc), rw = rd.w, rh = rd.h;
+  const arSrc = rw / rh, arCell = cellW / cellH;
+
+  let drawW, drawH;
+  if (fit === 'cover'){ drawW = cellW; drawH = cellH; }
+  else if (arSrc > arCell){ drawW = cellW; drawH = cellW / arSrc; }
+  else { drawH = cellH; drawW = cellH * arSrc; }
+
+  let pxW = Math.round(drawW / 72 * dpi);
+  let pxH = Math.round(drawH / 72 * dpi);
+  const cap = Math.max(rw, rh) * 2;                           // pas de sur-agrandissement absurde
+  const over = Math.max(pxW, pxH) / cap;
+  if (over > 1){ pxW = Math.round(pxW/over); pxH = Math.round(pxH/over); }
+  pxW = Math.max(24, pxW); pxH = Math.max(24, pxH);
+
+  const out = document.createElement('canvas');
+  out.width = pxW; out.height = pxH;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0,0,pxW,pxH);
+  if (gris) ctx.filter = 'grayscale(1)';
+
+  if (fit === 'cover'){
+    let sw = rw, sh = rh, sx = 0, sy = 0;
+    if (arSrc > arCell){ sw = rh * arCell; sx = (rw - sw)/2; }
+    else { sh = rw / arCell; sy = (rh - sh)/2; }
+    ctx.drawImage(rc, sx, sy, sw, sh, 0, 0, pxW, pxH);
+  } else {
+    ctx.drawImage(rc, 0, 0, rw, rh, 0, 0, pxW, pxH);
+  }
+
+  return { url: out.toDataURL('image/jpeg', quality), w: drawW, h: drawH };
+}
+
+/* ============================================================
+   Construction du PDF
+   ============================================================ */
+function txt(s){
+  return String(s||'').normalize('NFC')
+    .replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"')
+    .replace(/[\u2013\u2014]/g,'-').replace(/\u2026/g,'...')
+    .replace(/[^\x20-\x7E\u00A0-\u00FF]/g,'');
+}
+function cut(s,max){ s = txt(s); return s.length>max ? s.slice(0,max-1)+'.' : s; }
+
+let building = false;
+
+async function build(preview){
+  const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+  const dpi = preview ? 100 : S.dpi;
+  const quality = preview ? .68 : S.qualite;
+
+  const doc = await PDFDocument.create();
+  doc.setTitle(S.titre || S.nomfic);
+  doc.setProducer('Chemise');
+  doc.setCreator('Chemise');
+  const font  = await doc.embedFont(StandardFonts.Helvetica);
+  const fontB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const grey  = rgb(.45,.45,.45);
+  const line  = rgb(.78,.78,.78);
+
+  const m = S.marge * MM;
+  const headH = S.titre ? 22 : 0;
+  const footH = S.num ? 18 : 0;
+
+  const drawFurniture = (page, idx, total) => {
+    const {width:pw, height:ph} = page.getSize();
+    if (S.titre){
+      const t = cut(S.titre, 90);
+      page.drawText(t, {x:m, y: ph - m - 10, size:9, font:fontB, color:rgb(.2,.2,.2)});
+      page.drawLine({start:{x:m, y:ph-m-16}, end:{x:pw-m, y:ph-m-16}, thickness:.5, color:line});
+    }
+    if (S.num){
+      const t = `${idx} / ${total}`;
+      const w = font.widthOfTextAtSize(t, 8);
+      page.drawText(t, {x:(pw-w)/2, y:m + 4, size:8, font, color:grey});
+    }
+  };
+
+  // documents source chargés pour la fusion vectorielle
+  const libCache = new Map();
+  const getLibDoc = async (it) => {
+    let d = libCache.get(it.srcId);
+    if (!d){
+      d = await PDFDocument.load(it.srcBytes, {ignoreEncryption:true});
+      libCache.set(it.srcId, d);
+    }
+    return d;
+  };
+
+  const drawInCell = async (page, it, cell, opts) => {
+    opts = opts || {};
+    const legBelow = !!opts.legendBelow;
+    const legH  = (S.legende && !legBelow) ? 11 : 0;
+    const boxH  = Math.max(20, cell.h - legH);
+    const baseY = cell.y + legH;
+
+    const label = () => {
+      if (!S.legende) return;
+      const t = cut(it.name, Math.max(8, Math.floor(cell.w/3.6)));
+      if (!t) return;
+      const w = font.widthOfTextAtSize(t, 6.5);
+      const ly = legBelow ? cell.y - 9 : cell.y + 2;
+      page.drawText(t, {x: cell.x + Math.max(0,(cell.w-w)/2), y: ly, size:6.5, font, color:grey});
+    };
+
+    // — chemin vectoriel : la page PDF d'origine est réinsérée telle quelle
+    if (it.kind === 'pdf' && S.vecteur && !S.gris && it.rot === 0){
+      try{
+        const src = await getLibDoc(it);
+        const sp = src.getPage(it.pageNum - 1);
+        if (((sp.getRotation().angle||0) % 360) === 0){
+          const ep = await doc.embedPage(sp);
+          const ar = ep.width / ep.height, arCell = cell.w / boxH;
+          let dw, dh;
+          if (ar > arCell){ dw = cell.w; dh = cell.w / ar; }
+          else { dh = boxH; dw = boxH * ar; }
+          const x = cell.x + (cell.w - dw)/2, y = baseY + (boxH - dh)/2;
+          page.drawPage(ep, {x, y, width:dw, height:dh});
+          if (S.bordure) page.drawRectangle({x, y, width:dw, height:dh, borderWidth:.6, borderColor:line});
+          label();
+          return;
+        }
+      }catch(e){ /* on retombe sur la rastérisation */ }
+    }
+
+    const p = await prepare(it, cell.w, boxH, dpi, quality, S.fit, S.gris);
+    const img = await doc.embedJpg(p.url);
+    const x = cell.x + (cell.w - p.w)/2;
+    const y = baseY + (boxH - p.h)/2;
+    page.drawImage(img, {x, y, width:p.w, height:p.h});
+    if (S.bordure) page.drawRectangle({x, y, width:p.w, height:p.h, borderWidth:.6, borderColor:line});
+    label();
+  };
+
+  const drawCutMarks = (page, cell) => {
+    const L = 9, o = 3.5, c = rgb(.55,.55,.55), th = .4;
+    const pts = [
+      [cell.x, cell.y], [cell.x+cell.w, cell.y],
+      [cell.x, cell.y+cell.h], [cell.x+cell.w, cell.y+cell.h]
+    ];
+    pts.forEach(([px,py],k)=>{
+      const sx = (k%2===0) ? -1 : 1;
+      const sy = (k<2) ? -1 : 1;
+      page.drawLine({start:{x:px+sx*o, y:py}, end:{x:px+sx*(o+L), y:py}, thickness:th, color:c});
+      page.drawLine({start:{x:px, y:py+sy*o}, end:{x:px, y:py+sy*(o+L)}, thickness:th, color:c});
+    });
+  };
+
+  /* ---- Modèle « page = pièce » ---- */
+  if (S.layout === 'auto'){
+    for (const it of S.items){
+      if (it.kind === 'pdf' && S.vecteur && !S.gris){
+        const src = await getLibDoc(it);
+        const [cp] = await doc.copyPages(src, [it.pageNum-1]);
+        if (it.rot) cp.setRotation(degrees(((cp.getRotation().angle||0) + it.rot) % 360));
+        doc.addPage(cp);
+        continue;
+      }
+      const rc = await rotatedCanvas(it, Math.min(2400, Math.max(it.w, it.h)));
+      const rd = dims(rc);
+      let wpt = rd.w / dpi * 72, hpt = rd.h / dpi * 72;
+      const long = Math.max(wpt, hpt);                 // on borne entre ~7 cm et A3
+      const k = long > 1190 ? 1190/long : (long < 200 ? 200/long : 1);
+      wpt *= k; hpt *= k;
+      const page = doc.addPage([wpt + 2*m, hpt + 2*m]);
+      page.drawRectangle({x:0,y:0,width:page.getWidth(),height:page.getHeight(),color:rgb(1,1,1)});
+      const p = await prepare(it, wpt, hpt, dpi, quality, 'contain', S.gris);
+      const img = await doc.embedJpg(p.url);
+      page.drawImage(img, {x:(page.getWidth()-p.w)/2, y:(page.getHeight()-p.h)/2, width:p.w, height:p.h});
+      if (S.bordure) page.drawRectangle({x:(page.getWidth()-p.w)/2, y:(page.getHeight()-p.h)/2, width:p.w, height:p.h, borderWidth:.6, borderColor:line});
+    }
+    const total = doc.getPageCount();
+    if (S.num || S.titre) doc.getPages().forEach((pg,i)=>drawFurniture(pg,i+1,total));
+    return doc.save();
+  }
+
+  /* ---- Format de page ---- */
+  let [pw, ph] = FORMATS[S.format];
+  if (S.orient === 'paysage') [pw, ph] = [ph, pw];
+  if (S.orient === 'auto' && S.layout === '1'){
+    // décidé par pièce plus bas
+  }
+
+  /* ---- Modèle « carte réelle » ---- */
+  if (S.layout === 'id'){
+    const per = S.perPage;
+    const cols = per >= 4 ? 2 : 1;
+    const rows = Math.ceil(per/cols);
+    const g = Math.max(S.ecart, 4) * MM;
+    const totalW = cols*CARD_W + (cols-1)*g;
+    const totalH = rows*CARD_H + (rows-1)*g;
+    const pages = Math.ceil(S.items.length/per);
+
+    if (!preview && (totalW > pw - 2*m || totalH > ph - 2*m - headH - footH)){
+      say("Les cartes à taille réelle débordent de la page : réduisez les marges, l'écart, ou le nombre de cartes par page.", 'err');
+    }
+
+    for (let pi=0; pi<pages; pi++){
+      const page = doc.addPage([pw, ph]);
+      page.drawRectangle({x:0,y:0,width:pw,height:ph,color:rgb(1,1,1)});
+      const availTop = ph - m - headH, availBot = m + footH;
+      const y0 = (availTop + availBot)/2 + totalH/2;
+      const x0 = (pw - totalW)/2;
+      for (let k=0; k<per; k++){
+        const it = S.items[pi*per + k];
+        if (!it) break;
+        const c = k % cols, r = Math.floor(k/cols);
+        const cell = {
+          x: x0 + c*(CARD_W+g),
+          y: y0 - (r+1)*CARD_H - r*g,
+          w: CARD_W, h: CARD_H
+        };
+        await drawInCell(page, it, cell, {legendBelow:true});
+        if (S.coupe) drawCutMarks(page, cell);
+      }
+      drawFurniture(page, pi+1, pages);
+    }
+    return doc.save();
+  }
+
+  /* ---- Modèles en grille ---- */
+  const [cols, rows] = GRIDS[S.layout];
+  const per = cols*rows;
+  const pages = Math.ceil(S.items.length/per);
+
+  for (let pi=0; pi<pages; pi++){
+    let PW = pw, PH = ph;
+    if (S.orient === 'auto' && S.layout === '1'){
+      const it = S.items[pi];
+      const swap = (it.rot===90 || it.rot===270);
+      const w = swap ? it.h : it.w, h = swap ? it.w : it.h;
+      const base = FORMATS[S.format];
+      if (w > h){ PW = base[1]; PH = base[0]; } else { PW = base[0]; PH = base[1]; }
+    }
+    const page = doc.addPage([PW, PH]);
+    page.drawRectangle({x:0,y:0,width:PW,height:PH,color:rgb(1,1,1)});
+
+    const g = S.ecart * MM;
+    const areaW = PW - 2*m;
+    const areaH = PH - 2*m - headH - footH;
+    const cw = (areaW - g*(cols-1))/cols;
+    const ch = (areaH - g*(rows-1))/rows;
+    const originY = m + footH;
+
+    for (let k=0; k<per; k++){
+      const it = S.items[pi*per + k];
+      if (!it) break;
+      const c = k % cols, r = Math.floor(k/cols);
+      const cell = {
+        x: m + c*(cw+g),
+        y: originY + (rows-1-r)*(ch+g),
+        w: cw, h: ch
+      };
+      await drawInCell(page, it, cell);
+    }
+    drawFurniture(page, pi+1, pages);
+  }
+  return doc.save();
+}
+
+/* ============================================================
+   Aperçu
+   ============================================================ */
+let timer = null, previewToken = 0;
+let lock = Promise.resolve();
+function serial(fn){
+  const run = lock.then(fn, fn);
+  lock = run.then(()=>{}, ()=>{});
+  return run;
+}
+function schedule(){
+  updateReadout();
+  if (!S.apercu) return;
+  clearTimeout(timer);
+  timer = setTimeout(preview, 420);
+}
+
+async function preview(){
+  const box = $('#apercu');
+  if (!S.items.length){
+    box.innerHTML = `<div class="vide"><p>Rien à montrer pour l'instant</p><small>Dès que vous ajoutez un fichier, le PDF fini s'affiche ici, page par page.</small></div>`;
+    return;
+  }
+  if (building){ clearTimeout(timer); timer = setTimeout(preview, 350); return; }
+  const token = ++previewToken;
+  building = true;
+  box.innerHTML = `<div class="charge"><span class="spin"></span> Composition en cours…</div>`;
+  try{
+    const bytes = await serial(()=>build(true));
+    if (token !== previewToken){ building = false; return; }
+    const doc = await pdfjsLib.getDocument({data: bytes.slice(0)}).promise;
+    const max = Math.min(doc.numPages, 6);
+    const wrap = document.createElement('div');
+    wrap.className = 'pages';
+    for (let p=1; p<=max; p++){
+      const page = await doc.getPage(p);
+      const vp1 = page.getViewport({scale:1});
+      const scale = Math.min(1.1, 300 / vp1.width);
+      const vp = page.getViewport({scale});
+      const c = document.createElement('canvas');
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+      const d = document.createElement('div');
+      d.className = 'page';
+      d.appendChild(c);
+      const no = document.createElement('span');
+      no.className = 'no';
+      no.textContent = `Page ${p}`;
+      d.appendChild(no);
+      wrap.appendChild(d);
+    }
+    if (token !== previewToken){ building = false; return; }
+    box.innerHTML = '';
+    box.appendChild(wrap);
+    if (doc.numPages > max){
+      const n = document.createElement('p');
+      n.className = 'hint';
+      n.style.marginTop = '26px';
+      n.textContent = `${doc.numPages - max} page(s) supplémentaire(s) non affichée(s) dans l'aperçu — elles seront bien dans le PDF exporté.`;
+      box.appendChild(n);
+    }
+  }catch(e){
+    console.error(e);
+    box.innerHTML = `<div class="vide"><p>L'aperçu n'a pas pu être composé</p><small>${esc(e.message||'Erreur inconnue')} — l'export reste possible.</small></div>`;
+  }
+  building = false;
+}
+
+/* ============================================================
+   Export
+   ============================================================ */
+async function exportPdf(){
+  if (!S.items.length) return;
+  const btn = $('#exportBtn');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Assemblage…';
+  try{
+    const bytes = await serial(()=>build(false));
+    const blob = new Blob([bytes], {type:'application/pdf'});
+    const name = (S.nomfic.trim() || 'dossier').replace(/[\\/:*?"<>|]/g,'-') + '.pdf';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+    const ko = blob.size/1024;
+    say(`${name} — ${ko>1024 ? (ko/1024).toFixed(1)+' Mo' : Math.round(ko)+' Ko'}. Le fichier est dans vos téléchargements.`, 'ok');
+  }catch(e){
+    console.error(e);
+    say(`L'assemblage a échoué : ${e.message||e}. Retirez la dernière pièce ajoutée et réessayez.`, 'err');
+  }
+  btn.disabled = false; btn.textContent = old;
+}
+
+/* ============================================================
+   Démarrage rapide
+   ============================================================ */
+const PRESETS = [
+  { k:'id', t:"Carte d'identité", d:"CNI, permis, carte grise — recto et verso à taille réelle sur une A4.",
+    ico:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="1.5" y="4" width="17" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><circle cx="7" cy="9.5" r="2" fill="currentColor"/><path d="M12 8.5h4M12 11.5h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+    s:{layout:'id', perPage:2, fit:'cover', coupe:true, marge:15, ecart:8, format:'a4', orient:'portrait', dpi:300, num:false} },
+  { k:'dossier', t:"Dossier administratif", d:"Une pièce par page A4, pages numérotées. Le format attendu au guichet.",
+    ico:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M2.5 4.5A1.5 1.5 0 0 1 4 3h3.6l1.4 2H16a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 16 17H4a1.5 1.5 0 0 1-1.5-1.5v-11Z" stroke="currentColor" stroke-width="1.6"/></svg>',
+    s:{layout:'1', fit:'contain', marge:14, format:'a4', orient:'portrait', dpi:200, num:true, coupe:false} },
+  { k:'fusion', t:"Fusionner des PDF", d:"Colle plusieurs PDF bout à bout sans rien changer à leur mise en page.",
+    ico:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="8" height="14" rx="1.5" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="6" width="7" height="8" rx="1.5" stroke="currentColor" stroke-width="1.6"/></svg>',
+    s:{layout:'auto', vecteur:true, marge:0, dpi:200, num:false, coupe:false} },
+  { k:'photos', t:"Planche de photos", d:"Quatre photos par page, pour un récapitulatif léger à envoyer.",
+    ico:'<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="2" width="7" height="7" rx="1" fill="currentColor"/><rect x="2" y="11" width="7" height="7" rx="1" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="1" fill="currentColor"/></svg>',
+    s:{layout:'4', fit:'cover', marge:10, ecart:5, format:'a4', orient:'portrait', dpi:200, num:true, coupe:false} }
+];
+
+function buildPresets(){
+  const box = $('#presets');
+  box.innerHTML = '';
+  PRESETS.forEach(p=>{
+    const b = document.createElement('button');
+    b.type='button'; b.className='qb';
+    b.innerHTML = `<span class="qi">${p.ico}</span><span><b>${p.t}</b><span>${p.d}</span></span>`;
+    b.addEventListener('click', ()=>{
+      Object.assign(S, p.s);
+      syncUI(); schedule();
+      say(`Réglé sur « ${p.t} ». Ajoutez vos fichiers, tout le reste est prêt.`, 'ok');
+    });
+    box.appendChild(b);
+  });
+}
+
+function syncUI(){
+  buildModels();
+  $('#format').value = S.format;
+  setSeg('orient', S.orient);
+  setSeg('fit', S.fit);
+  setSeg('perPage', String(S.perPage));
+  $('#marge').value = S.marge; $('#margeV').textContent = S.marge+' mm';
+  $('#ecart').value = S.ecart; $('#ecartV').textContent = S.ecart+' mm';
+  $('#dpi').value = String(S.dpi);
+  $('#qualite').value = Math.round(S.qualite*100);
+  $('#qualiteV').textContent = Math.round(S.qualite*100)+' %';
+  $('#optNum').checked = S.num;
+  $('#optLegende').checked = S.legende;
+  $('#optBordure').checked = S.bordure;
+  $('#optCoupe').checked = S.coupe;
+  $('#optGris').checked = S.gris;
+  $('#optVecteur').checked = S.vecteur;
+  syncVisibility();
+}
+
+/* ============================================================
+   Interface — modèles
+   ============================================================ */
+function buildModels(){
+  const box = $('#models');
+  box.innerHTML = '';
+  MODELS.forEach(m=>{
+    const b = document.createElement('button');
+    b.type='button'; b.className='model'+(m.v===S.layout?' on':'');
+    b.dataset.v = m.v;
+    b.innerHTML = m.ico() + `<span class="nm">${m.nm}</span>`;
+    b.addEventListener('click', ()=>{
+      S.layout = m.v;
+      if (m.v === 'id'){ setSeg('fit','cover'); S.fit='cover'; }
+      buildModels(); syncVisibility(); schedule();
+    });
+    box.appendChild(b);
+  });
+  $('#modelHint').textContent = MODELS.find(m=>m.v===S.layout).hint;
+}
+
+function syncVisibility(){
+  const auto = S.layout === 'auto';
+  const id   = S.layout === 'id';
+  $('#fFormat').hidden = auto;
+  $('#fOrient').hidden = auto;
+  $('#fGap').hidden    = auto || S.layout === '1';
+  $('#fFit').hidden    = auto;
+  $('#fPerPage').hidden = !id;
+}
+
+function setSeg(id, v){
+  $$(`#${id} button`).forEach(b=>b.classList.toggle('on', b.dataset.v === v));
+}
+function wireSeg(id, key, cast){
+  $$(`#${id} button`).forEach(b=>{
+    b.addEventListener('click', ()=>{
+      setSeg(id, b.dataset.v);
+      S[key] = cast ? cast(b.dataset.v) : b.dataset.v;
+      schedule();
+    });
+  });
+}
+
+/* ============================================================
+   Câblage
+   ============================================================ */
+function init(){
+  buildPresets(); buildModels(); syncVisibility(); render();
+
+  // dépôt
+  const drop = $('#drop'), picker = $('#picker');
+  drop.addEventListener('click', ()=>picker.click());
+  drop.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); picker.click(); }});
+  picker.addEventListener('change', e=>{ addFiles(e.target.files); picker.value=''; });
+  ['dragenter','dragover'].forEach(ev=>{
+    document.addEventListener(ev, e=>{ e.preventDefault(); drop.classList.add('hot'); });
+  });
+  ['dragleave','drop'].forEach(ev=>{
+    document.addEventListener(ev, e=>{ e.preventDefault(); if(ev==='drop'||e.target===drop) drop.classList.remove('hot'); });
+  });
+  document.addEventListener('drop', e=>{
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+
+  // actions sur les pièces
+  $('#grid').addEventListener('click', e=>{
+    const b = e.target.closest('button[data-a]'); if (!b) return;
+    const id = e.target.closest('.piece').dataset.id;
+    const i = S.items.findIndex(x=>x.id===id); if (i<0) return;
+    const a = b.dataset.a;
+    if (a==='rot'){ S.items[i].rot = (S.items[i].rot + 90) % 360; S.items[i].cache = null; }
+    if (a==='del'){ S.items.splice(i,1); }
+    if (a==='dup'){ S.items.splice(i+1, 0, Object.assign({}, S.items[i], {id:'i'+(++S.seq), cache:null})); }
+    render(); schedule();
+  });
+
+  // réordonner
+  if (window.Sortable){
+    Sortable.create($('#grid'), {
+      animation:150, ghostClass:'drag', handle:'.vue',
+      onEnd(){
+        const order = $$('#grid .piece').map(el=>el.dataset.id);
+        S.items.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
+        render(); schedule();
+      }
+    });
+  }
+
+  // barre d'outils
+  $('#sortName').addEventListener('click', ()=>{
+    S.items.sort((a,b)=>a.name.localeCompare(b.name, 'fr', {numeric:true}));
+    render(); schedule();
+  });
+  $('#reverse').addEventListener('click', ()=>{ S.items.reverse(); render(); schedule(); });
+  $('#rotAll').addEventListener('click', ()=>{
+    S.items.forEach(it=>{ it.rot=(it.rot+90)%360; it.cache=null; });
+    render(); schedule();
+  });
+  $('#clear').addEventListener('click', ()=>{
+    if (!S.items.length) return;
+    S.items = []; render(); schedule();
+    say('Plateau vidé.');
+  });
+  $('#refresh').addEventListener('click', preview);
+  $('#exportBtn').addEventListener('click', exportPdf);
+
+  // segments
+  wireSeg('orient','orient');
+  wireSeg('fit','fit');
+  wireSeg('perPage','perPage', v=>parseInt(v,10));
+
+  // champs
+  $('#format').addEventListener('change', e=>{ S.format=e.target.value; schedule(); });
+  $('#dpi').addEventListener('change', e=>{ S.dpi=parseInt(e.target.value,10); updateReadout(); });
+  $('#marge').addEventListener('input', e=>{ S.marge=+e.target.value; $('#margeV').textContent=S.marge+' mm'; schedule(); });
+  $('#ecart').addEventListener('input', e=>{ S.ecart=+e.target.value; $('#ecartV').textContent=S.ecart+' mm'; schedule(); });
+  $('#qualite').addEventListener('input', e=>{ S.qualite=+e.target.value/100; $('#qualiteV').textContent=e.target.value+' %'; });
+  $('#titre').addEventListener('input', e=>{ S.titre=e.target.value; schedule(); });
+  $('#nomfic').addEventListener('input', e=>{ S.nomfic=e.target.value; });
+
+  const boxes = {optNum:'num', optLegende:'legende', optBordure:'bordure', optCoupe:'coupe', optGris:'gris', optVecteur:'vecteur', optApercu:'apercu'};
+  Object.entries(boxes).forEach(([id,key])=>{
+    $('#'+id).addEventListener('change', e=>{
+      S[key] = e.target.checked;
+      if (key==='apercu' && e.target.checked) preview();
+      else schedule();
+    });
+  });
+
+  // raccourcis
+  document.addEventListener('keydown', e=>{
+    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='s'){ e.preventDefault(); exportPdf(); }
+  });
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
+
+})();
+</script>
+</body>
+</html>

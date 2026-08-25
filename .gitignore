@@ -1,0 +1,20 @@
+# Sorties du compagnon — ces dossiers peuvent peser plusieurs gigaoctets
+compagnon/Coran/
+compagnon/Telechargements/
+*.part
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Systèmes
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp

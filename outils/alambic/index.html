@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alambic — convertir audio, vidéo et images</title>
+<meta name="description" content="Convertir des vocaux WhatsApp en MP3, une vidéo en MP4 lisible partout, un JPEG en PNG. Traitement en lot, entièrement dans le navigateur.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="stylesheet" href="../../atelier/atelier.css">
+<style>
+  .etat-moteur{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    border:1px solid var(--trait);border-left:2px solid var(--reglet);
+    border-radius:var(--r);background:rgba(11,26,23,.4);
+    padding:11px 14px;margin-bottom:18px;font-size:12.5px;color:var(--craie-2);
+  }
+  .etat-moteur.pret{border-left-color:var(--repere)}
+  .rang-item.fini{border-color:rgba(95,211,184,.4)}
+  .rang-item.rate{border-color:rgba(229,88,77,.45)}
+  .fam{
+    display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;
+    text-transform:uppercase;border:1px solid var(--trait);border-radius:20px;
+    padding:1px 7px;color:var(--craie-3);margin-right:7px;
+  }
+  .fam.audio{color:var(--repere);border-color:rgba(95,211,184,.4)}
+  .fam.video{color:var(--reglet);border-color:rgba(242,183,5,.4)}
+  .fam.image{color:#C9A8FF;border-color:rgba(201,168,255,.4)}
+  .avert{
+    border:1px solid rgba(242,183,5,.35);background:rgba(242,183,5,.08);
+    border-radius:var(--r);padding:9px 11px;font-size:11.5px;color:#F0D28A;line-height:1.5;
+  }
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M15 6v9L8 30a3 3 0 0 0 2.7 4.4h18.6A3 3 0 0 0 32 30l-7-15V6" stroke="#F2B705" stroke-width="2.4" fill="#16302A" stroke-linejoin="round"/>
+      <path d="M13 5h14" stroke="#FFD34D" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M11.5 24h17" stroke="#5FD3B8" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="17" cy="28.5" r="1.6" fill="#5FD3B8"/>
+      <circle cx="23" cy="30" r="1.2" fill="#5FD3B8" opacity=".7"/>
+    </svg>
+    <div>
+      <h1>Alambic</h1>
+      <p>Convertir audio, vidéo et images</p>
+    </div>
+  </a>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">Aucun fichier</div>
+  <button class="btn btn-go" id="btnGo" disabled>Convertir</button>
+</header>
+
+<div class="shell">
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <aside class="panel">
+
+    <details class="grp" open id="grpAudio">
+      <summary>Audio</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="fAudio">Convertir vers</label>
+          <select id="fAudio">
+            <option value="mp3" selected>MP3 — lisible partout</option>
+            <option value="m4a">M4A / AAC — meilleur à poids égal</option>
+            <option value="ogg">OGG / Opus — le plus compact</option>
+            <option value="wav">WAV — brut, pour le montage</option>
+            <option value="flac">FLAC — sans perte</option>
+          </select>
+        </div>
+        <div class="field" id="champDebitA">
+          <label for="fDebitA">Débit</label>
+          <select id="fDebitA">
+            <option value="96">96 kb/s — voix</option>
+            <option value="128">128 kb/s — léger</option>
+            <option value="192" selected>192 kb/s — bon compromis</option>
+            <option value="256">256 kb/s</option>
+            <option value="320">320 kb/s — maximum</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Canaux</label>
+          <div class="seg" id="segCanaux">
+            <button data-v="garder" class="on">Garder</button>
+            <button data-v="1">Mono</button>
+            <button data-v="2">Stéréo</button>
+          </div>
+        </div>
+        <p class="hint">Les vocaux WhatsApp arrivent en <b>.opus</b> ou <b>.ogg</b> :
+          c'est ici qu'on les passe en MP3 pour qu'ils s'ouvrent partout.</p>
+      </div>
+    </details>
+
+    <details class="grp" open id="grpVideo">
+      <summary>Vidéo</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="fVideo">Convertir vers</label>
+          <select id="fVideo">
+            <option value="mp4" selected>MP4 / H.264 — lisible partout</option>
+            <option value="webm">WebM / VP8 — pour le web</option>
+            <option value="gif">GIF animé</option>
+            <option value="remux-mp4">MP4 — changer le conteneur seulement</option>
+            <option value="remux-mkv">MKV — changer le conteneur seulement</option>
+          </select>
+        </div>
+
+        <div id="reglagesVideo">
+          <div class="field" style="margin-top:16px">
+            <label>Qualité</label>
+            <div class="seg" id="segQualite">
+              <button data-v="haute">Haute</button>
+              <button data-v="standard" class="on">Standard</button>
+              <button data-v="legere">Légère</button>
+            </div>
+          </div>
+          <div class="field" style="margin-top:16px">
+            <label for="fResol">Résolution</label>
+            <select id="fResol">
+              <option value="0" selected>Garder l'original</option>
+              <option value="1080">1080p — Full HD</option>
+              <option value="720">720p — HD, bon pour WhatsApp</option>
+              <option value="480">480p — léger</option>
+              <option value="360">360p — très léger</option>
+            </select>
+          </div>
+          <div class="field" style="margin-top:16px">
+            <label for="fFps">Images par seconde</label>
+            <select id="fFps">
+              <option value="0" selected>Garder l'original</option>
+              <option value="30">30</option>
+              <option value="24">24 — rendu cinéma</option>
+              <option value="15">15 — très léger</option>
+            </select>
+          </div>
+          <div class="checks" style="margin-top:16px">
+            <label class="chk"><input type="checkbox" id="optMuet"><span>Supprimer la piste audio</span></label>
+          </div>
+        </div>
+
+        <div id="motRemux" hidden class="avert" style="margin-top:14px">
+          Les pistes sont recopiées telles quelles : c'est instantané et sans
+          aucune perte, mais ça ne marche que si le codec d'origine est accepté
+          par le nouveau conteneur.
+        </div>
+
+        <div id="motGif" hidden class="avert" style="margin-top:14px">
+          Un GIF pèse très lourd. Restez sous 10 secondes et sous 480 px de large,
+          sinon le fichier dépassera facilement 20 Mo.
+        </div>
+
+        <p class="hint" style="margin-top:14px">
+          L'encodage vidéo est la tâche la plus lourde de l'atelier&nbsp;:
+          comptez à peu près la durée de la vidéo elle-même.
+        </p>
+      </div>
+    </details>
+
+    <details class="grp" open id="grpImage">
+      <summary>Images</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="fImage">Convertir vers</label>
+          <select id="fImage">
+            <option value="png">PNG — sans perte, transparence</option>
+            <option value="jpeg" selected>JPEG — photos, fichier léger</option>
+            <option value="webp">WebP — le plus léger à qualité égale</option>
+          </select>
+        </div>
+        <div class="field" id="champQualiteI">
+          <label for="fQualiteI">Qualité <span id="qualiteIV">88 %</span></label>
+          <input type="range" id="fQualiteI" min="40" max="100" step="1" value="88">
+        </div>
+        <div class="field">
+          <label for="fMaxI">Taille maximale</label>
+          <select id="fMaxI">
+            <option value="0" selected>Garder l'original</option>
+            <option value="3000">3000 px — impression</option>
+            <option value="1920">1920 px — écran</option>
+            <option value="1280">1280 px — web</option>
+            <option value="800">800 px — vignette</option>
+          </select>
+        </div>
+        <p class="hint">Les images sont traitées sans le moteur vidéo&nbsp;:
+          c'est instantané. Le <b>.heic</b> des iPhone n'est pas lisible ici.</p>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Journal technique</summary>
+      <div class="grp-body">
+        <div class="journal" id="journal">En attente…</div>
+        <button class="btn btn-mini" id="btnVider">Vider</button>
+      </div>
+    </details>
+
+  </aside>
+
+  <!-- ======================= PLATEAU ======================= -->
+  <main class="mat">
+
+    <div class="etat-moteur" id="etatMoteur">
+      <span class="spin" id="spinMoteur" hidden></span>
+      <span id="txtMoteur">Le moteur audio/vidéo (~32 Mo) se télécharge au premier usage, puis reste en cache. Les images n'en ont pas besoin.</span>
+    </div>
+
+    <div class="etat-moteur mobile-seulement" style="border-left-color:var(--rouge)">
+      <span>Sur téléphone, les images et les audios passent très bien. Pour la
+      vidéo, restez sur des fichiers courts&nbsp;: la mémoire d'un navigateur
+      mobile est bien plus serrée que sur un ordinateur.</span>
+    </div>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des fichiers">
+      <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M4 8h9l3 3h4"/><path d="M20 11v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6"/><path d="m9 15 3-3 3 3"/><path d="M12 12v6"/>
+      </svg>
+      <h2 class="drop-t">Déposez ce que vous voulez convertir</h2>
+      <p class="drop-s">
+        Audio, vidéo, images — mélangés si vous voulez. Chaque fichier part
+        vers le format choisi pour sa famille.
+      </p>
+      <span class="fauxbtn">Choisir des fichiers</span>
+      <p class="drop-f">Rien n'est envoyé sur internet</p>
+    </div>
+
+    <div class="section-head" id="teteLot" hidden>
+      <h2>File d'attente</h2>
+      <span class="count" id="compte">0</span>
+      <div class="tools">
+        <button class="btn btn-mini" id="btnToutDl" hidden>Tout télécharger</button>
+        <button class="btn btn-mini" id="btnVidez">Tout retirer</button>
+      </div>
+    </div>
+
+    <ul class="rangs" id="lot"></ul>
+
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Alambic</b> — L'Atelier</span>
+  <span>Vos fichiers ne quittent pas cet onglet</span>
+  <span id="piedInfo"></span>
+</footer>
+
+<script type="module">
+import { $, dire, bravo, rater, poids, duree, sansExtension, extension,
+         telecharger, zoneDepot, segment, curseur, journal, sonder,
+         verrouFermeture, patienter } from '../../atelier/ui.js';
+import { charger, executer, analyser, obstacleVideo, versBlob, ext, mimeDe, multiCoeurs }
+  from '../../atelier/moteur.js';
+
+/* ------------------------------------------------------------------ */
+/* Familles                                                            */
+/* ------------------------------------------------------------------ */
+const EXT_AUDIO = ['mp3','m4a','aac','wav','flac','ogg','opus','oga','wma','amr','aiff','aif','mka','ac3','caf'];
+const EXT_VIDEO = ['mp4','mov','mkv','avi','webm','flv','wmv','m4v','3gp','mpg','mpeg','ts','mts','ogv'];
+const EXT_IMAGE = ['png','jpg','jpeg','webp','gif','bmp','avif','tif','tiff','svg'];
+
+function famille(fichier) {
+  const t = (fichier.type || '').toLowerCase();
+  if (t.startsWith('audio/')) return 'audio';
+  if (t.startsWith('video/')) return 'video';
+  if (t.startsWith('image/')) return 'image';
+  const e = extension(fichier.name);
+  if (EXT_AUDIO.includes(e)) return 'audio';
+  if (EXT_VIDEO.includes(e)) return 'video';
+  if (EXT_IMAGE.includes(e)) return 'image';
+  return 'inconnu';
+}
+
+/* ------------------------------------------------------------------ */
+/* État                                                                */
+/* ------------------------------------------------------------------ */
+let lot = [];
+let compteur = 0;
+let enCours = false;
+
+const jrn = journal($('#journal'));
+const segCanaux = segment($('#segCanaux'));
+const segQualite = segment($('#segQualite'));
+
+curseur($('#fQualiteI'), $('#qualiteIV'), (v) => `${v} %`);
+
+$('#fAudio').addEventListener('change', () => {
+  $('#champDebitA').hidden = !['mp3','m4a','ogg'].includes($('#fAudio').value);
+  rafraichir();
+});
+$('#fImage').addEventListener('change', () => {
+  $('#champQualiteI').hidden = $('#fImage').value === 'png';
+  rafraichir();
+});
+$('#fVideo').addEventListener('change', () => {
+  const v = $('#fVideo').value;
+  const remux = v.startsWith('remux-');
+  $('#reglagesVideo').hidden = remux;
+  $('#motRemux').hidden = !remux;
+  $('#motGif').hidden = v !== 'gif';
+  rafraichir();
+});
+
+/* ------------------------------------------------------------------ */
+/* Réception                                                           */
+/* ------------------------------------------------------------------ */
+zoneDepot($('#drop'), ajouter);
+
+function ajouter(fichiers) {
+  for (const f of fichiers) {
+    const fam = famille(f);
+    if (fam === 'inconnu') {
+      rater(`« ${f.name} » : format non reconnu, ignoré.`);
+      continue;
+    }
+    const piece = {
+      id: ++compteur, fichier: f, famille: fam,
+      duree: 0, etat: 'attente', part: 0, blob: null, nomSortie: '', message: '',
+    };
+    lot.push(piece);
+    if (fam !== 'image') {
+      sonder(f).then((i) => { piece.duree = i.duree; rafraichir(); }).catch(() => {});
+    }
+  }
+  rafraichir();
+}
+
+$('#btnVidez').addEventListener('click', () => {
+  if (enCours) { dire('Conversion en cours — patientez.'); return; }
+  lot = []; rafraichir();
+});
+$('#btnVider').addEventListener('click', () => jrn.vider());
+
+/* ------------------------------------------------------------------ */
+/* Cible de chaque famille                                             */
+/* ------------------------------------------------------------------ */
+function cible(fam) {
+  if (fam === 'audio') return $('#fAudio').value;
+  if (fam === 'image') return $('#fImage').value === 'jpeg' ? 'jpg' : $('#fImage').value;
+  const v = $('#fVideo').value;
+  return v.startsWith('remux-') ? v.slice(6) : v;
+}
+
+/* ------------------------------------------------------------------ */
+/* Affichage                                                           */
+/* ------------------------------------------------------------------ */
+const echapper = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function rafraichir() {
+  $('#teteLot').hidden = !lot.length;
+  $('#compte').textContent = lot.length;
+  $('#btnGo').disabled = !lot.length || enCours;
+  $('#btnToutDl').hidden = lot.filter((p) => p.blob).length < 2;
+
+  const total = lot.reduce((s, p) => s + p.fichier.size, 0);
+  $('#readout').innerHTML = lot.length
+    ? `<b>${lot.length}</b> fichier${lot.length > 1 ? 's' : ''} · ${poids(total)}`
+    : 'Aucun fichier';
+
+  $('#lot').innerHTML = lot.map((p, n) => {
+    const cl = p.etat === 'fini' ? ' fini' : p.etat === 'rate' ? ' rate' : '';
+    const flecheVers = `${extension(p.fichier.name).toUpperCase() || '?'} → ${cible(p.famille).toUpperCase()}`;
+    const sous = p.etat === 'fini'
+      ? `${poids(p.fichier.size)} → ${poids(p.blob.size)}` +
+        (p.fichier.size ? `  (${Math.round(p.blob.size / p.fichier.size * 100)} %)` : '')
+      : [flecheVers, poids(p.fichier.size), p.duree ? duree(p.duree) : null]
+        .filter(Boolean).join(' · ');
+
+    const etat = p.etat === 'travail' ? `${Math.round(p.part * 100)} %`
+      : p.etat === 'fini' ? 'prêt'
+      : p.etat === 'rate' ? 'échec'
+      : p.etat === 'analyse' ? 'analyse…' : '';
+
+    return `
+      <li class="rang-item${cl}" data-id="${p.id}">
+        <span class="no">${String(n + 1).padStart(2, '0')}</span>
+        <span class="txt">
+          <span class="nm"><span class="fam ${p.famille}">${p.famille}</span>${echapper(p.etat === 'fini' ? p.nomSortie : p.fichier.name)}</span>
+          <span class="sub">${echapper(p.message || sous)}</span>
+        </span>
+        <span class="etat ${p.etat === 'fini' ? 'ok' : p.etat === 'rate' ? 'err' : ''}">${etat}</span>
+        <span class="acts">
+          ${p.blob ? `<button class="btn btn-mini" data-a="dl">Enregistrer</button>` : ''}
+          <button data-a="del" class="del" title="Retirer" aria-label="Retirer">&#10005;</button>
+        </span>
+        <i class="jauge" style="width:${p.etat === 'travail' ? p.part * 100 : p.etat === 'fini' ? 100 : 0}%"></i>
+      </li>`;
+  }).join('');
+}
+
+$('#lot').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-a]');
+  if (!b) return;
+  const id = +b.closest('.rang-item').dataset.id;
+  const p = lot.find((x) => x.id === id);
+  if (!p) return;
+  if (b.dataset.a === 'dl' && p.blob) telecharger(p.blob, p.nomSortie);
+  else if (b.dataset.a === 'del') {
+    if (enCours && p.etat === 'travail') { dire('Ce fichier est en cours de conversion.'); return; }
+    lot = lot.filter((x) => x.id !== id);
+    rafraichir();
+  }
+});
+
+$('#btnToutDl').addEventListener('click', async () => {
+  const prets = lot.filter((p) => p.blob);
+  for (const p of prets) { telecharger(p.blob, p.nomSortie); await patienter(350); }
+  bravo(`${prets.length} fichiers enregistrés.`);
+});
+
+/* ------------------------------------------------------------------ */
+/* Conversion d'image — sans ffmpeg, par le Canvas                     */
+/* ------------------------------------------------------------------ */
+async function convertirImage(piece) {
+  const format = $('#fImage').value;                 // png | jpeg | webp
+  const extSortie = format === 'jpeg' ? 'jpg' : format;
+  const max = +$('#fMaxI').value;
+  const qualite = (+$('#fQualiteI').value) / 100;
+
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(piece.fichier);
+  } catch (_) {
+    throw new Error("Image illisible par le navigateur (le .heic des iPhone n'est pas pris en charge).");
+  }
+
+  const origL = bitmap.width, origH = bitmap.height;
+  let l = origL, h = origH;
+  if (max && Math.max(l, h) > max) {
+    const facteur = max / Math.max(l, h);
+    l = Math.round(l * facteur);
+    h = Math.round(h * facteur);
+  }
+
+  const toile = document.createElement('canvas');
+  toile.width = l; toile.height = h;
+  const ctx = toile.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+
+  // Le JPEG ignore la transparence : sans fond, elle vire au noir.
+  if (format === 'jpeg') {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, l, h);
+  }
+  ctx.drawImage(bitmap, 0, 0, l, h);
+  bitmap.close?.();
+
+  const blob = await new Promise((r) =>
+    toile.toBlob(r, 'image/' + format, format === 'png' ? undefined : qualite));
+
+  if (!blob) throw new Error(`Votre navigateur ne sait pas écrire le format ${format.toUpperCase()}.`);
+
+  piece.blob = blob;
+  piece.nomSortie = sansExtension(piece.fichier.name) + '.' + extSortie;
+  piece.message = origL === l ? `${l} × ${h} px` : `${origL} × ${origH} → ${l} × ${h} px`;
+  jrn.ecrire(`[${piece.nomSortie}] ${l}×${h} · ${poids(blob.size)}`);
+}
+
+/* ------------------------------------------------------------------ */
+/* Conversion audio                                                    */
+/* ------------------------------------------------------------------ */
+function argsAudio(nomEntree, nomSortie) {
+  const format = $('#fAudio').value;
+  const debit = $('#fDebitA').value + 'k';
+  const args = ['-i', nomEntree, '-vn'];
+
+  if (segCanaux.valeur !== 'garder') args.push('-ac', segCanaux.valeur);
+
+  if (format === 'mp3')       args.push('-c:a', 'libmp3lame', '-b:a', debit);
+  else if (format === 'm4a')  args.push('-c:a', 'aac', '-b:a', debit);
+  else if (format === 'ogg')  args.push('-c:a', 'libopus', '-b:a', debit);
+  else if (format === 'wav')  args.push('-c:a', 'pcm_s16le');
+  else if (format === 'flac') args.push('-c:a', 'flac');
+
+  args.push('-y', nomSortie);
+  return args;
+}
+
+/* ------------------------------------------------------------------ */
+/* Conversion vidéo                                                    */
+/* ------------------------------------------------------------------ */
+const CRF = { haute: 20, standard: 24, legere: 30 };
+
+function argsVideo(nomEntree, nomSortie) {
+  const choix = $('#fVideo').value;
+
+  /* Changement de conteneur seul : aucune recompression. */
+  if (choix.startsWith('remux-')) {
+    return ['-i', nomEntree, '-c', 'copy', '-map', '0', '-y', nomSortie];
+  }
+
+  const resol = +$('#fResol').value;
+  const fps = +$('#fFps').value;
+
+  if (choix === 'gif') {
+    // Palette calculée et appliquée dans le même passage : bien meilleur
+    // rendu que la quantification par défaut.
+    const largeur = resol ? Math.min(resol, 640) : 480;
+    const cadence = fps || 12;
+    const filtre =
+      `fps=${cadence},scale=${largeur}:-1:flags=lanczos,split[a][b];` +
+      `[a]palettegen=stats_mode=diff[p];` +
+      `[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle`;
+    return ['-i', nomEntree, '-filter_complex', filtre, '-loop', '0', '-y', nomSortie];
+  }
+
+  const args = ['-i', nomEntree];
+  const filtres = [];
+  // -2 laisse ffmpeg choisir une largeur paire : H.264 l'exige.
+  if (resol) filtres.push(`scale=-2:${resol}`);
+  if (fps) filtres.push(`fps=${fps}`);
+  if (filtres.length) args.push('-vf', filtres.join(','));
+
+  if (choix === 'mp4') {
+    args.push('-c:v', 'libx264', '-crf', String(CRF[segQualite.valeur]),
+              '-preset', 'veryfast', '-pix_fmt', 'yuv420p');
+  } else {
+    args.push('-c:v', 'libvpx', '-crf', String(CRF[segQualite.valeur] + 6), '-b:v', '0');
+  }
+
+  if ($('#optMuet').checked) {
+    args.push('-an');
+  } else if (choix === 'mp4') {
+    args.push('-c:a', 'aac', '-b:a', '128k');
+  } else {
+    args.push('-c:a', 'libvorbis', '-b:a', '128k');
+  }
+
+  if (choix === 'mp4') args.push('-movflags', '+faststart');
+  args.push('-y', nomSortie);
+  return args;
+}
+
+/* ------------------------------------------------------------------ */
+/* Traitement                                                          */
+/* ------------------------------------------------------------------ */
+$('#btnGo').addEventListener('click', lancer);
+
+async function lancer() {
+  if (enCours) return;
+  const aFaire = lot.filter((p) => p.etat !== 'fini');
+  if (!aFaire.length) { dire('Tout est déjà converti.'); return; }
+
+  enCours = true;
+  verrouFermeture(true);
+  $('#btnGo').disabled = true;
+  $('#btnGo').textContent = 'Conversion…';
+
+  // Les images passent en premier : elles sont instantanées, et ça évite
+  // d'attendre le moteur vidéo pour rien.
+  const images = aFaire.filter((p) => p.famille === 'image');
+  const medias = aFaire.filter((p) => p.famille !== 'image');
+
+  let reussis = 0;
+
+  for (const piece of images) {
+    piece.etat = 'travail'; piece.part = 0; rafraichir();
+    try { await convertirImage(piece); piece.etat = 'fini'; piece.part = 1; reussis++; }
+    catch (e) { piece.etat = 'rate'; piece.message = e.message; jrn.ecrire(`[${piece.fichier.name}] ÉCHEC — ${e.message}`); }
+    rafraichir();
+  }
+
+  if (medias.length) {
+    try {
+      await preparerMoteur();
+    } catch (e) {
+      rater("Le moteur n'a pas pu démarrer : " + e.message);
+      finir(); return;
+    }
+    for (const piece of medias) {
+      try { await convertirMedia(piece); reussis++; }
+      catch (e) {
+        piece.etat = 'rate'; piece.message = e.message;
+        jrn.ecrire(`[${piece.fichier.name}] ÉCHEC — ${e.message}`);
+      }
+      rafraichir();
+    }
+  }
+
+  finir();
+  if (reussis) bravo(`${reussis} fichier${reussis > 1 ? 's' : ''} converti${reussis > 1 ? 's' : ''}.`);
+  else rater("Aucun fichier n'a pu être converti — voir le journal technique.");
+}
+
+async function convertirMedia(piece) {
+  const extSortie = cible(piece.famille);
+  const nomEntree = 'e.' + (ext(piece.fichier.name) || 'bin');
+  const nomSortie = 's.' + extSortie;
+
+  piece.etat = 'analyse'; piece.message = ''; rafraichir();
+  const infos = await analyser(piece.fichier);
+  if (infos.duree) piece.duree = infos.duree;
+  jrn.ecrire(`[${piece.fichier.name}] ${infos.codecVideo || '—'} / ${infos.codecAudio || '—'} · ${duree(infos.duree)}`);
+
+  if (piece.famille === 'audio' && !infos.codecAudio) {
+    throw new Error("Ce fichier ne contient aucune piste audio.");
+  }
+
+  // Le changement de conteneur ne décode rien : il passe partout.
+  const recopie = $('#fVideo').value.startsWith('remux-');
+  if (piece.famille === 'video' && !recopie) {
+    const obstacle = obstacleVideo(infos);
+    if (obstacle) throw new Error(obstacle);
+  }
+
+  const args = piece.famille === 'audio'
+    ? argsAudio(nomEntree, nomSortie)
+    : argsVideo(nomEntree, nomSortie);
+
+  jrn.ecrire(`[${piece.fichier.name}] ffmpeg ${args.join(' ')}`);
+
+  piece.etat = 'travail'; piece.part = 0; rafraichir();
+
+  const donnees = await executer({
+    entrees: [{ nom: nomEntree, donnees: piece.fichier }],
+    args, sortie: nomSortie, duree: piece.duree,
+    surProgression: (p) => {
+      piece.part = p;
+      const li = document.querySelector(`.rang-item[data-id="${piece.id}"]`);
+      if (!li) return;
+      li.querySelector('.jauge').style.width = (p * 100) + '%';
+      li.querySelector('.etat').textContent = Math.round(p * 100) + ' %';
+    },
+    surJournal: (l) => { if (/error|invalid|failed|unable|does not contain/i.test(l)) jrn.ecrire(l); },
+  });
+
+  piece.blob = versBlob(donnees, extSortie);
+  piece.nomSortie = sansExtension(piece.fichier.name) + '.' + extSortie;
+  piece.etat = 'fini'; piece.part = 1;
+  jrn.ecrire(`[${piece.nomSortie}] ${poids(piece.blob.size)} — terminé`);
+}
+
+function finir() {
+  enCours = false;
+  verrouFermeture(false);
+  $('#btnGo').textContent = 'Convertir';
+  rafraichir();
+}
+
+/* ------------------------------------------------------------------ */
+/* Moteur                                                              */
+/* ------------------------------------------------------------------ */
+let moteurPret = false;
+
+async function preparerMoteur() {
+  if (moteurPret) return;
+  $('#spinMoteur').hidden = false;
+  await charger((etape) => { $('#txtMoteur').textContent = etape; });
+  moteurPret = true;
+  $('#spinMoteur').hidden = true;
+  $('#etatMoteur').classList.add('pret');
+  $('#txtMoteur').textContent =
+    `Moteur prêt (${multiCoeurs() ? 'multi-cœurs' : 'mono-cœur'}). Traitement local.`;
+}
+
+$('#piedInfo').textContent = multiCoeurs()
+  ? 'Moteur multi-cœurs disponible'
+  : 'Moteur mono-cœur — prévoir du temps sur la vidéo';
+
+rafraichir();
+</script>
+
+</body>
+</html>
