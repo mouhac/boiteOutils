@@ -5,29 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Alambic — convertir audio, vidéo et images</title>
 <meta name="description" content="Convertir des vocaux WhatsApp en MP3, une vidéo en MP4 lisible partout, un JPEG en PNG. Traitement en lot, entièrement dans le navigateur.">
-<meta name="theme-color" content="#0B1A17">
+<meta name="theme-color" content="#FFFFFF">
 <link rel="stylesheet" href="../../atelier/atelier.css">
 <style>
   .etat-moteur{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
     border:1px solid var(--trait);border-left:2px solid var(--reglet);
-    border-radius:var(--r);background:rgba(11,26,23,.4);
+    border-radius:var(--r);background:var(--creme);
     padding:11px 14px;margin-bottom:18px;font-size:12.5px;color:var(--craie-2);
   }
   .etat-moteur.pret{border-left-color:var(--repere)}
-  .rang-item.fini{border-color:rgba(95,211,184,.4)}
-  .rang-item.rate{border-color:rgba(229,88,77,.45)}
+  .rang-item.fini{border-color:#A8DCD0}
+  .rang-item.rate{border-color:#EBB3AB}
   .fam{
     display:inline-block;font-family:var(--mono);font-size:9px;letter-spacing:.1em;
     text-transform:uppercase;border:1px solid var(--trait);border-radius:20px;
     padding:1px 7px;color:var(--craie-3);margin-right:7px;
   }
-  .fam.audio{color:var(--repere);border-color:rgba(95,211,184,.4)}
-  .fam.video{color:var(--reglet);border-color:rgba(242,183,5,.4)}
-  .fam.image{color:#C9A8FF;border-color:rgba(201,168,255,.4)}
+  .fam.audio{color:#0B7A66;border-color:#A8DCD0;background:var(--repere-clair)}
+  .fam.video{color:#8A6200;border-color:#EBD08A;background:var(--reglet-clair)}
+  .fam.image{color:#6242BE;border-color:#CBBCEE;background:#EFEAFB}
   .avert{
-    border:1px solid rgba(242,183,5,.35);background:rgba(242,183,5,.08);
-    border-radius:var(--r);padding:9px 11px;font-size:11.5px;color:#F0D28A;line-height:1.5;
+    border:1px solid rgba(224,161,0,.3);background:var(--reglet-clair);
+    border-radius:var(--r);padding:9px 11px;font-size:11.5px;color:#8A6200;line-height:1.5;
   }
   [hidden]{display:none!important}
 </style>
