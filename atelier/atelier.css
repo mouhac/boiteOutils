@@ -302,6 +302,66 @@ input[type=range]:focus-visible{outline:2px solid var(--reglet);outline-offset:4
 .toast.err{border-left-color:var(--rouge)}
 .toast.ok{border-left-color:var(--repere)}
 
+/* ---------- Fenêtre de livraison ---------- */
+dialog.fenetre{
+  border:1px solid var(--trait);border-radius:6px;padding:0;
+  background:var(--tapis-2);color:var(--craie);
+  width:min(94vw,470px);max-height:90vh;overflow:auto;
+  box-shadow:0 30px 70px rgba(0,0,0,.6);
+}
+dialog.fenetre::backdrop{background:rgba(4,12,10,.72)}
+.fenetre-tete{
+  display:flex;align-items:center;gap:12px;
+  padding:16px 20px;border-bottom:1px solid var(--trait);
+}
+.fenetre-tete h2{
+  margin:0;font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--craie);font-weight:600;
+}
+.fenetre-fermer{
+  margin-left:auto;background:transparent;border:1px solid var(--trait);
+  color:var(--craie-2);width:30px;height:30px;border-radius:var(--r);
+  cursor:pointer;display:grid;place-items:center;font-size:14px;line-height:1;
+}
+.fenetre-fermer:hover{background:var(--rouge);color:#fff;border-color:var(--rouge)}
+.fenetre-corps{padding:18px 20px;display:flex;flex-direction:column;gap:16px}
+.fenetre-pied{
+  display:flex;gap:8px;flex-wrap:wrap;
+  padding:14px 20px;border-top:1px solid var(--trait);background:rgba(11,26,23,.4);
+}
+.fenetre-pied .btn{flex:1}
+
+.bilan{
+  display:flex;align-items:center;gap:14px;
+  border:1px solid var(--trait);border-radius:var(--r);
+  background:var(--tapis-3);padding:12px 14px;
+}
+.bilan .vignette{
+  width:52px;height:68px;flex:none;border-radius:2px;background:var(--papier);
+  object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.bilan .chiffres{min-width:0;flex:1}
+.bilan .avant-apres{
+  font-family:var(--mono);font-size:13px;color:var(--craie);letter-spacing:.02em;
+}
+.bilan .avant-apres s{color:var(--craie-3);text-decoration-color:var(--rouge)}
+.bilan .avant-apres b{color:var(--repere);font-weight:600}
+.bilan .gain{
+  font-family:var(--mono);font-size:11px;color:var(--reglet);
+  letter-spacing:.06em;margin-top:3px;
+}
+.bilan .gain.nul{color:var(--rouge)}
+
+.nom-fichier{display:flex;align-items:stretch;gap:0}
+.nom-fichier input{border-top-right-radius:0;border-bottom-right-radius:0}
+.nom-fichier .ext{
+  display:flex;align-items:center;padding:0 12px;
+  border:1px solid var(--trait);border-left:0;
+  border-top-right-radius:var(--r);border-bottom-right-radius:var(--r);
+  background:rgba(255,255,255,.05);
+  font-family:var(--mono);font-size:12px;color:var(--reglet);
+}
+
 /* ---------- Bas de page ---------- */
 .pied{
   padding:16px 22px;border-top:1px solid var(--trait);background:var(--tapis-2);
@@ -371,6 +431,12 @@ input[type=range]:focus-visible{outline:2px solid var(--reglet);outline-offset:4
   .drop-t{font-size:18px}
   .section-head{margin:20px 0 10px}
   .pied{padding:14px 16px;gap:10px}
+
+  /* ---- Fenêtre de livraison ---- */
+  .fenetre-fermer{width:38px;height:38px;font-size:15px}
+  .fenetre-corps{padding:16px}
+  .fenetre-pied{padding:13px 16px}
+  .nom-fichier input{font-size:16px}
 }
 
 /* Écrans très étroits */

@@ -96,11 +96,13 @@ export const OUTILS = [
     icone: i('<circle cx="6" cy="7" r="2.2"/><circle cx="6" cy="17" r="2.2"/><path d="M8 8.2 19 17M8 15.8 19 7"/>'),
   },
   {
-    cle: 'presse', rayon: 'media', etat: 'chantier',
+    cle: 'presse', rayon: 'documents', etat: 'pret',
     nom: 'Presse',
-    sous: 'Alléger un fichier trop lourd',
-    detail: 'Viser une taille en Mo (WhatsApp, pièce jointe) et laisser l’outil trouver les réglages.',
-    icone: i('<path d="M4 4h16"/><path d="M4 20h16"/><path d="M8 8h8v8H8z"/><path d="M12 8V5M12 19v-3"/>'),
+    sous: 'Alléger un PDF trop lourd',
+    detail: 'Trois niveaux de compression, du plus léger au plus fidèle. ' +
+            'Livraison en PDF ou en JPG, avec le nom de votre choix.',
+    href: 'outils/presse/',
+    icone: i('<path d="M4 4h16"/><path d="M4 20h16"/><path d="M8 9h8v6H8z"/><path d="M12 9V6M12 18v-3"/>'),
   },
   {
     cle: 'soudure', rayon: 'media', etat: 'chantier',

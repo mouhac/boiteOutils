@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presse — alléger un PDF</title>
+<meta name="description" content="Réduire le poids d'un PDF trop lourd, avec trois niveaux de compression. Téléchargement en PDF ou en JPG, avec le nom de votre choix. Tout se passe dans le navigateur.">
+<meta name="theme-color" content="#0B1A17">
+<link rel="stylesheet" href="../../atelier/atelier.css">
+<style>
+  .rang-item.fini{border-color:rgba(95,211,184,.4)}
+  .rang-item.rate{border-color:rgba(229,88,77,.45)}
+  .rang-item.gonfle{border-color:rgba(242,183,5,.45)}
+
+  .avert{
+    border:1px solid rgba(242,183,5,.35);background:rgba(242,183,5,.08);
+    border-radius:var(--r);padding:11px 13px;font-size:12px;color:#F0D28A;line-height:1.55;
+  }
+  .avert b{color:var(--reglet-2)}
+
+  .note-methode{
+    border:1px solid var(--trait);border-left:2px solid var(--repere);
+    border-radius:var(--r);background:rgba(11,26,23,.4);
+    padding:13px 15px;font-size:12.5px;line-height:1.6;color:var(--craie-3);
+    margin-bottom:18px;
+  }
+  .note-methode b{color:var(--craie-2);font-weight:500}
+  .note-methode p{margin:0 0 7px}
+  .note-methode p:last-child{margin:0}
+
+  .jauges{display:flex;gap:10px;margin-top:4px}
+  .jauges .part{
+    flex:1;text-align:center;border:1px solid var(--trait);border-radius:var(--r);
+    padding:8px 4px;font-family:var(--mono);font-size:10px;color:var(--craie-3);
+    letter-spacing:.06em;
+  }
+  .jauges .part b{display:block;font-size:15px;color:var(--reglet);margin-bottom:2px}
+
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M6 6h28" stroke="#F2B705" stroke-width="3" stroke-linecap="round"/>
+      <path d="M6 34h28" stroke="#F2B705" stroke-width="3" stroke-linecap="round"/>
+      <rect x="11" y="15" width="18" height="10" rx="1.5" fill="#FFD34D"/>
+      <path d="M20 15v-5M20 30v-5" stroke="#5FD3B8" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="m16 12 4-3 4 3M16 28l4 3 4-3" stroke="#5FD3B8" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    </svg>
+    <div>
+      <h1>Presse</h1>
+      <p>Alléger un PDF trop lourd</p>
+    </div>
+  </a>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">Aucun fichier</div>
+  <button class="btn btn-go" id="btnGo" disabled>Compresser</button>
+</header>
+
+<div class="shell">
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <aside class="panel">
+
+    <details class="grp" open>
+      <summary>Taille visée</summary>
+      <div class="grp-body">
+        <div class="field">
+          <div class="seg col" id="segNiveau">
+            <button data-v="haute">Haute — viser 0,52 Mo</button>
+            <button data-v="moyenne" class="on">Moyenne — viser 0,71 Mo</button>
+            <button data-v="basse">Basse — viser 0,89 Mo</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="fCible">Ou une taille de votre choix <span id="cibleV">0,71 Mo</span></label>
+          <div class="nom-fichier">
+            <input type="number" id="fCible" min="0.05" max="500" step="0.01" value="0.71">
+            <span class="ext">Mo</span>
+          </div>
+          <p class="hint">L'outil cherche tout seul la qualité qui fait passer
+            le document sous cette taille. Il vous dira s'il n'y arrive pas.</p>
+        </div>
+
+        <div class="jauges">
+          <div class="part"><b id="cibleOctets">0,71</b>mégaoctets visés</div>
+          <div class="part"><b id="dpiV">150</b>points par pouce</div>
+        </div>
+
+        <div class="field">
+          <label for="fDpi">Résolution maximale</label>
+          <select id="fDpi">
+            <option value="96">96 dpi — lecture à l'écran, très léger</option>
+            <option value="150" selected>150 dpi — écran et e-mail</option>
+            <option value="200">200 dpi — impression correcte</option>
+            <option value="300">300 dpi — impression soignée</option>
+          </select>
+          <p class="hint">Si la qualité seule ne suffit pas à tenir la cible,
+            l'outil baissera lui-même la résolution sous cette valeur.</p>
+        </div>
+
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optGris"><span>Convertir en niveaux de gris (un scan perd souvent la moitié de son poids)</span></label>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Journal technique</summary>
+      <div class="grp-body">
+        <div class="journal" id="journal">En attente…</div>
+        <button class="btn btn-mini" id="btnVider">Vider</button>
+      </div>
+    </details>
+
+  </aside>
+
+  <!-- ======================= PLATEAU ======================= -->
+  <main class="mat">
+
+    <div class="note-methode">
+      <p><b>Comment ça marche.</b> Chaque page est redessinée en image, puis
+        recompressée. C'est ce qui permet de faire fondre un scan de 40 Mo.</p>
+      <p>En contrepartie, <b>le texte devient une image</b> : on ne peut plus le
+        sélectionner ni le rechercher. Pour un scan ou une photo d'acte, c'était
+        déjà le cas. Pour un PDF né sur ordinateur, avec du vrai texte,
+        l'opération peut même l'alourdir — l'outil vous le dira et vous
+        proposera de garder l'original.</p>
+    </div>
+
+    <div class="etat-moteur mobile-seulement" style="border-left-color:var(--rouge)">
+      <span>Sur téléphone, restez sur des documents d'une trentaine de pages :
+      au-delà, la mémoire du navigateur devient juste.</span>
+    </div>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des PDF">
+      <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+        <path d="M14 2v5h5"/><path d="M9 17h6M9 13h6"/>
+      </svg>
+      <h2 class="drop-t">Déposez vos PDF</h2>
+      <p class="drop-s">
+        Scans, dossiers, actes, factures. Plusieurs fichiers à la fois —
+        ils sont traités les uns après les autres.
+      </p>
+      <span class="fauxbtn">Choisir des fichiers</span>
+      <p class="drop-f">Rien n'est envoyé sur internet</p>
+    </div>
+
+    <div class="section-head" id="teteLot" hidden>
+      <h2>Documents</h2>
+      <span class="count" id="compte">0</span>
+      <div class="tools">
+        <button class="btn btn-mini" id="btnVidez">Tout retirer</button>
+      </div>
+    </div>
+
+    <ul class="rangs" id="lot"></ul>
+
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Presse</b> — L'Atelier</span>
+  <span>Vos documents ne quittent pas cet onglet</span>
+  <span id="piedInfo"></span>
+</footer>
+
+<!-- ======================= FENÊTRE DE LIVRAISON ======================= -->
+<dialog class="fenetre" id="fenetre">
+  <form method="dialog">
+    <div class="fenetre-tete">
+      <h2>Télécharger</h2>
+      <button class="fenetre-fermer" value="annuler" aria-label="Fermer">&#10005;</button>
+    </div>
+
+    <div class="fenetre-corps">
+
+      <div class="bilan">
+        <img class="vignette" id="vignette" alt="Première page">
+        <div class="chiffres">
+          <div class="avant-apres" id="avantApres"></div>
+          <div class="gain" id="gain"></div>
+        </div>
+      </div>
+
+      <div class="avert" id="avertGonfle" hidden></div>
+
+      <div class="field">
+        <label for="fFormat">Format</label>
+        <div class="seg" id="segFormat">
+          <button type="button" data-v="pdf" class="on">PDF</button>
+          <button type="button" data-v="jpg">JPG</button>
+        </div>
+      </div>
+
+      <div class="field" id="champPages" hidden>
+        <label for="fPages">Pages à enregistrer</label>
+        <select id="fPages"></select>
+        <p class="hint" id="motPages"></p>
+      </div>
+
+      <div class="field">
+        <label for="fNom">Nom du fichier</label>
+        <div class="nom-fichier">
+          <input type="text" id="fNom" spellcheck="false" autocomplete="off">
+          <span class="ext" id="extension">.pdf</span>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="fenetre-pied">
+      <button class="btn" value="annuler" type="submit">Annuler</button>
+      <button class="btn btn-go" value="ok" type="submit" id="btnLivrer">Enregistrer</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script type="module">
+import { $, dire, bravo, rater, poids, sansExtension, telecharger, zoneDepot,
+         segment, journal, verrouFermeture, nomPropre } from '../../atelier/ui.js';
+import { creerZip } from '../../atelier/zip.js';
+
+/* ------------------------------------------------------------------ */
+/* Bibliothèques                                                       */
+/* ------------------------------------------------------------------ */
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+const pretes = () => !!(window.PDFLib && window.pdfjsLib);
+
+/* ------------------------------------------------------------------ */
+/* Niveaux                                                             */
+/* ------------------------------------------------------------------ */
+const NIVEAUX = { haute: 0.52, moyenne: 0.71, basse: 0.89 };
+const MO = 1024 * 1024;
+
+const jrn = journal($('#journal'));
+
+const segNiveau = segment($('#segNiveau'), (v) => {
+  $('#fCible').value = String(NIVEAUX[v]);
+  majJauges();
+});
+
+/* Taper une taille à la main sort des trois préréglages. */
+$('#fCible').addEventListener('input', () => {
+  const v = parseFloat($('#fCible').value);
+  const trouve = Object.keys(NIVEAUX).find((k) => Math.abs(NIVEAUX[k] - v) < 1e-9);
+  document.querySelectorAll('#segNiveau button')
+    .forEach((b) => b.classList.toggle('on', b.dataset.v === trouve));
+  majJauges();
+});
+
+function cibleOctets() {
+  const v = parseFloat($('#fCible').value);
+  return (isFinite(v) && v > 0 ? v : 0.71) * MO;
+}
+
+/** Une cible en dessous de 0,1 Mo s'écrit en kilooctets : « 0,00 Mo » ne dit rien. */
+function cibleLisible(octets) {
+  return octets < 0.1 * MO
+    ? Math.round(octets / 1024) + ' Ko'
+    : (octets / MO).toFixed(2).replace('.', ',') + ' Mo';
+}
+
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+function majJauges() {
+  const v = parseFloat($('#fCible').value);
+  const texte = (isFinite(v) && v > 0 ? v : 0.71).toFixed(2).replace('.', ',');
+  $('#cibleV').textContent = texte + ' Mo';
+  $('#cibleOctets').textContent = texte;
+  $('#dpiV').textContent = $('#fDpi').value;
+}
+$('#fDpi').addEventListener('change', majJauges);
+majJauges();
+
+$('#btnVider').addEventListener('click', () => jrn.vider());
+
+/* ------------------------------------------------------------------ */
+/* État                                                                */
+/* ------------------------------------------------------------------ */
+let lot = [];
+let compteur = 0;
+let enCours = false;
+
+zoneDepot($('#drop'), ajouter, { accepte: 'application/pdf,.pdf' });
+
+function ajouter(fichiers) {
+  for (const f of fichiers) {
+    if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') {
+      rater(`« ${f.name} » n'est pas un PDF — ignoré.`);
+      continue;
+    }
+    lot.push({
+      id: ++compteur, fichier: f, etat: 'attente', part: 0,
+      pages: [], pdf: null, message: '', nbPages: 0,
+    });
+  }
+  rafraichir();
+}
+
+$('#btnVidez').addEventListener('click', () => {
+  if (enCours) { dire('Compression en cours — patientez.'); return; }
+  libererTout();
+  lot = [];
+  rafraichir();
+});
+
+function libererTout() {
+  for (const p of lot) {
+    if (p.vignetteUrl) URL.revokeObjectURL(p.vignetteUrl);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Affichage                                                           */
+/* ------------------------------------------------------------------ */
+const echapper = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function rafraichir() {
+  $('#teteLot').hidden = !lot.length;
+  $('#compte').textContent = lot.length;
+  $('#btnGo').disabled = !lot.length || enCours;
+
+  const total = lot.reduce((s, p) => s + p.fichier.size, 0);
+  $('#readout').innerHTML = lot.length
+    ? `<b>${lot.length}</b> document${lot.length > 1 ? 's' : ''} · ${poids(total)}`
+    : 'Aucun fichier';
+
+  $('#lot').innerHTML = lot.map((p, n) => {
+    const gonfle = p.etat === 'fini' && p.pdf && p.pdf.size >= p.fichier.size;
+    const rate = p.etat === 'fini' && !p.atteinte;
+    const cl = p.etat === 'rate' ? ' rate'
+      : (gonfle || rate) ? ' gonfle' : p.etat === 'fini' ? ' fini' : '';
+
+    let sous;
+    if (p.etat === 'fini') {
+      sous = `${poids(p.fichier.size)} → ${poids(p.pdf.size)}` +
+             ` · visé ${cibleLisible(p.cible)}` +
+             ` · qualité ${String(p.qualite).replace('.', ',')} · ${p.dpi} dpi` +
+             ` · ${pluriel(p.nbPages, 'page')}`;
+    } else {
+      sous = p.message || `${poids(p.fichier.size)}` +
+             (p.nbPages ? ` · ${p.nbPages} pages` : '');
+    }
+
+    const etat = p.etat === 'travail' ? `${Math.round(p.part * 100)} %`
+      : p.etat === 'fini' ? (gonfle ? 'plus lourd' : p.atteinte ? 'cible tenue' : 'au mieux')
+      : p.etat === 'rate' ? 'échec' : '';
+
+    return `
+      <li class="rang-item${cl}" data-id="${p.id}">
+        <span class="no">${String(n + 1).padStart(2, '0')}</span>
+        <span class="txt">
+          <span class="nm">${echapper(p.fichier.name)}</span>
+          <span class="sub">${echapper(sous)}</span>
+        </span>
+        <span class="etat ${p.etat === 'fini' ? ((gonfle || rate) ? '' : 'ok') : p.etat === 'rate' ? 'err' : ''}">${etat}</span>
+        <span class="acts">
+          ${p.pdf ? `<button class="btn btn-mini" data-a="dl">Télécharger</button>` : ''}
+          <button data-a="del" class="del" title="Retirer" aria-label="Retirer">&#10005;</button>
+        </span>
+        <i class="jauge" style="width:${p.etat === 'travail' ? p.part * 100 : p.etat === 'fini' ? 100 : 0}%"></i>
+      </li>`;
+  }).join('');
+}
+
+$('#lot').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-a]');
+  if (!b) return;
+  const p = lot.find((x) => x.id === +b.closest('.rang-item').dataset.id);
+  if (!p) return;
+
+  if (b.dataset.a === 'dl') ouvrirFenetre(p);
+  else if (b.dataset.a === 'del') {
+    if (enCours && p.etat === 'travail') { dire('Ce document est en cours de traitement.'); return; }
+    if (p.vignetteUrl) URL.revokeObjectURL(p.vignetteUrl);
+    lot = lot.filter((x) => x.id !== p.id);
+    rafraichir();
+  }
+});
+
+/* ------------------------------------------------------------------ */
+/* Compression                                                         */
+/* ------------------------------------------------------------------ */
+$('#btnGo').addEventListener('click', lancer);
+
+async function lancer() {
+  if (enCours) return;
+  if (!pretes()) {
+    rater("Les bibliothèques PDF n'ont pas pu être chargées. Rechargez la page.");
+    return;
+  }
+  const aFaire = lot.filter((p) => p.etat !== 'fini');
+  if (!aFaire.length) { dire('Tout est déjà compressé.'); return; }
+
+  enCours = true;
+  verrouFermeture(true);
+  $('#btnGo').disabled = true;
+  $('#btnGo').textContent = 'Compression…';
+
+  let reussis = 0;
+  for (const piece of aFaire) {
+    try {
+      await compresser(piece);
+      reussis++;
+    } catch (e) {
+      piece.etat = 'rate';
+      piece.message = e.message;
+      jrn.ecrire(`[${piece.fichier.name}] ÉCHEC — ${e.message}`);
+    }
+    rafraichir();
+  }
+
+  enCours = false;
+  verrouFermeture(false);
+  $('#btnGo').textContent = 'Compresser';
+  rafraichir();
+
+  if (reussis === 1) {
+    const seul = aFaire.find((p) => p.etat === 'fini');
+    if (seul) ouvrirFenetre(seul);          // un seul document : on enchaîne
+  } else if (reussis) {
+    bravo(`${reussis} documents compressés.`);
+  } else {
+    rater("Aucun document n'a pu être compressé — voir le journal technique.");
+  }
+}
+
+/* Un onglet plafonne la taille d'un canevas : au-delà, il rend du vide.
+   On rabote l'échelle plutôt que de produire des pages blanches. */
+const COTE_MAX = 10000;
+const SURFACE_MAX = 40e6;
+
+/* Qualités testées pendant la passe de sondage. Peu nombreuses sur un gros
+   document : chaque point coûte un encodage JPEG par page. */
+const SONDES_COURT = [0.92, 0.82, 0.72, 0.62, 0.52, 0.42, 0.32, 0.22, 0.14];
+const SONDES_LONG  = [0.85, 0.7, 0.55, 0.4, 0.28, 0.18];
+
+/** Coût approximatif de la structure PDF, hors images. */
+const surcout = (nbPages) => 950 + nbPages * 1150;
+
+/**
+ * Dessine chaque page et applique `traiter` au canevas obtenu.
+ * Le rendu est de loin l'étape la plus lente : on le factorise ici pour
+ * pouvoir l'exécuter deux fois sans dupliquer la logique.
+ */
+async function parcourirPages(doc, dpi, gris, surAvancement, traiter) {
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d', { alpha: false });
+
+  for (let n = 1; n <= doc.numPages; n++) {
+    const page = await doc.getPage(n);
+    const base = page.getViewport({ scale: 1 });        // dimensions en points
+
+    let echelle = dpi / 72;
+    const bride = Math.min(
+      COTE_MAX / (base.width * echelle),
+      COTE_MAX / (base.height * echelle),
+      Math.sqrt(SURFACE_MAX / (base.width * echelle * base.height * echelle)),
+      1,
+    );
+    if (bride < 1) echelle *= bride;
+
+    const vue = page.getViewport({ scale: echelle });
+    toile.width = Math.max(1, Math.round(vue.width));
+    toile.height = Math.max(1, Math.round(vue.height));
+
+    // Le JPEG ne connaît pas la transparence : sans fond blanc, tout noircit.
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, toile.width, toile.height);
+
+    // « print » plutôt que l'affichage par défaut : en mode affichage,
+    // pdf.js enchaîne ses passes de rendu avec requestAnimationFrame, qui ne
+    // se déclenche pas dans un onglet en arrière-plan. La page serait bien
+    // dessinée, mais la promesse ne se résoudrait jamais — la compression
+    // se figerait dès qu'on change d'onglet. En mode « print », le rendu
+    // s'enchaîne tout seul et rend la main dans tous les cas.
+    await page.render({ canvasContext: ctx, viewport: vue, intent: 'print' }).promise;
+    page.cleanup();
+
+    if (gris) enNoirEtBlanc(ctx, toile.width, toile.height);
+
+    await traiter(toile, base, n);
+    surAvancement(n / doc.numPages);
+    await new Promise((r) => setTimeout(r, 0));        // laisse respirer l'affichage
+  }
+}
+
+async function compresser(piece) {
+  const { PDFDocument } = window.PDFLib;
+  const cible = cibleOctets();
+  const dpiDemande = +$('#fDpi').value;
+  const gris = $('#optGris').checked;
+
+  piece.etat = 'travail';
+  piece.part = 0;
+  piece.message = '';
+  piece.pages = [];
+  piece.cible = cible;
+  rafraichir();
+
+  const avancer = (part) => {
+    piece.part = Math.min(0.999, part);
+    const li = document.querySelector(`.rang-item[data-id="${piece.id}"]`);
+    if (li) {
+      li.querySelector('.jauge').style.width = (piece.part * 100) + '%';
+      li.querySelector('.etat').textContent = Math.round(piece.part * 100) + ' %';
+    }
+  };
+
+  const octets = new Uint8Array(await piece.fichier.arrayBuffer());
+  const doc = await window.pdfjsLib.getDocument({ data: octets }).promise;
+  piece.nbPages = doc.numPages;
+
+  const sondes = doc.numPages > 30 ? SONDES_LONG : SONDES_COURT;
+  jrn.ecrire(`[${piece.fichier.name}] ${doc.numPages} pages · cible ` +
+             `${(cible / MO).toFixed(2)} Mo · jusqu'à ${dpiDemande} dpi`);
+
+  /* ---- Passe 1 : sonder le poids obtenu à chaque qualité ---------- */
+  /* On ne garde que les tailles, jamais les images : sur cent pages,
+     conserver neuf variantes de chacune saturerait la mémoire. */
+  let dpi = dpiDemande;
+  let choix = null;
+
+  /* La descente en résolution compte jusqu'à quatre paliers depuis 300 dpi
+     (300 → 150 → 110 → 72). Le garde-fou est large exprès : si la boucle
+     s'arrêtait avant d'avoir conclu, `choix` resterait nul et la suite
+     planterait au lieu de livrer un résultat. */
+  for (let tentative = 0; tentative < 5 && !choix; tentative++) {
+    const totaux = new Array(sondes.length).fill(surcout(doc.numPages));
+
+    await parcourirPages(doc, dpi, gris,
+      (p) => avancer(p * 0.5),
+      async (toile) => {
+        for (let i = 0; i < sondes.length; i++) {
+          const essai = await new Promise((r) => toile.toBlob(r, 'image/jpeg', sondes[i]));
+          if (essai) totaux[i] += essai.size;
+        }
+      });
+
+    const lisible = sondes.map((q, i) => `${q}:${poids(totaux[i])}`).join('  ');
+    jrn.ecrire(`[${dpi} dpi] ${lisible}`);
+
+    const trouve = sondes.findIndex((_, i) => totaux[i] <= cible);
+    if (trouve !== -1) {
+      choix = { qualite: sondes[trouve], dpi, estime: totaux[trouve] };
+    } else if (dpi > 72) {
+      // Même à la qualité la plus basse on dépasse : il reste la résolution.
+      const suivant = dpi > 150 ? 150 : dpi > 110 ? 110 : 72;
+      jrn.ecrire(`[${piece.fichier.name}] cible hors d'atteinte à ${dpi} dpi — ` +
+                 `nouvel essai à ${suivant} dpi`);
+      dpi = suivant;
+    } else {
+      // Rien n'y fait : on livre le mieux possible et on le dira.
+      choix = { qualite: sondes[sondes.length - 1], dpi,
+                estime: totaux[totaux.length - 1], insuffisant: true };
+    }
+  }
+
+  /* Ceinture et bretelles : quoi qu'il arrive, on livre quelque chose. */
+  if (!choix) {
+    choix = { qualite: sondes[sondes.length - 1], dpi, estime: 0, insuffisant: true };
+  }
+
+  /* ---- Passe 2 : refaire le rendu à la qualité retenue ------------ */
+  const sortie = await PDFDocument.create();
+  await parcourirPages(doc, choix.dpi, gris,
+    (p) => avancer(0.5 + p * 0.5),
+    async (toile, base) => {
+      const image = await new Promise((r) => toile.toBlob(r, 'image/jpeg', choix.qualite));
+      if (!image) throw new Error('Une page n’a pas pu être encodée.');
+      piece.pages.push({ blob: image, largeur: base.width, hauteur: base.height });
+
+      const incorporee = await sortie.embedJpg(new Uint8Array(await image.arrayBuffer()));
+      const feuille = sortie.addPage([base.width, base.height]);
+      feuille.drawImage(incorporee, { x: 0, y: 0, width: base.width, height: base.height });
+    });
+
+  doc.destroy();
+
+  const donnees = await sortie.save();
+  piece.pdf = new Blob([donnees], { type: 'application/pdf' });
+  piece.qualite = choix.qualite;
+  piece.dpi = choix.dpi;
+  piece.atteinte = piece.pdf.size <= cible;
+  piece.etat = 'fini';
+  piece.part = 1;
+
+  if (piece.vignetteUrl) URL.revokeObjectURL(piece.vignetteUrl);
+  piece.vignetteUrl = URL.createObjectURL(piece.pages[0].blob);
+
+  jrn.ecrire(`[${piece.fichier.name}] ${poids(piece.fichier.size)} → ` +
+             `${poids(piece.pdf.size)} · qualité ${choix.qualite} · ${choix.dpi} dpi` +
+             (piece.atteinte ? ' · cible tenue' : ' · CIBLE NON ATTEINTE'));
+}
+
+function enNoirEtBlanc(ctx, l, h) {
+  const image = ctx.getImageData(0, 0, l, h);
+  const d = image.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // Pondération perceptuelle : l'œil est bien plus sensible au vert.
+    const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+    d[i] = d[i + 1] = d[i + 2] = g;
+  }
+  ctx.putImageData(image, 0, 0);
+}
+
+/* ------------------------------------------------------------------ */
+/* Fenêtre de livraison                                                */
+/* ------------------------------------------------------------------ */
+const fenetre = $('#fenetre');
+let courant = null;
+
+const segFormat = segment($('#segFormat'), (v) => {
+  $('#extension').textContent = v === 'pdf' ? '.pdf'
+    : (courant && courant.nbPages > 1 && $('#fPages').value === 'toutes') ? '.zip' : '.jpg';
+  $('#champPages').hidden = v !== 'jpg' || !courant || courant.nbPages < 2;
+  majMotPages();
+});
+
+$('#fPages').addEventListener('change', () => {
+  $('#extension').textContent = $('#fPages').value === 'toutes' ? '.zip' : '.jpg';
+  majMotPages();
+});
+
+function majMotPages() {
+  if (segFormat.valeur !== 'jpg' || !courant) return;
+  const toutes = $('#fPages').value === 'toutes';
+  $('#motPages').textContent = toutes
+    ? `Les ${courant.nbPages} pages seront réunies dans une archive ZIP.`
+    : 'Une seule image sera enregistrée.';
+}
+
+function ouvrirFenetre(piece) {
+  courant = piece;
+
+  $('#vignette').src = piece.vignetteUrl || '';
+  const part = Math.round(piece.pdf.size / piece.fichier.size * 100);
+  const gonfle = piece.pdf.size >= piece.fichier.size;
+  const cibleMo = cibleLisible(piece.cible);
+  // Sans plafond, un gain de 99,6 % s'afficherait « 100 % » — ce qui
+  // laisserait croire qu'il ne reste plus rien du fichier.
+  const gagne = Math.min(99, 100 - part);
+
+  $('#avantApres').innerHTML =
+    `<s>${poids(piece.fichier.size)}</s> &rarr; <b>${poids(piece.pdf.size)}</b>`;
+  $('#gain').textContent = gonfle
+    ? `${part} % du poids d'origine — le fichier a grossi`
+    : piece.atteinte
+      ? `${gagne} % de gagné · cible de ${cibleMo} tenue`
+      : `${gagne} % de gagné · cible de ${cibleMo} non atteinte`;
+  $('#gain').classList.toggle('nul', gonfle || !piece.atteinte);
+
+  $('#avertGonfle').hidden = !(gonfle || !piece.atteinte);
+  if (gonfle) {
+    $('#avertGonfle').innerHTML =
+      "<b>Ce PDF contenait du vrai texte, pas des images.</b> Le redessiner en " +
+      "images l'a alourdi au lieu de l'alléger. Gardez plutôt l'original.";
+  } else if (!piece.atteinte) {
+    $('#avertGonfle').innerHTML =
+      `<b>La cible de ${cibleMo} n'a pas pu être atteinte.</b> Voici le ` +
+      `meilleur résultat possible : qualité ${String(piece.qualite).replace('.', ',')} ` +
+      `à ${piece.dpi} dpi. ${pluriel(piece.nbPages, 'page')} : il y a un plancher ` +
+      `incompressible — visez un peu plus haut, ou passez en niveaux de gris.`;
+  }
+
+  // Choix des pages
+  const select = $('#fPages');
+  select.innerHTML = piece.nbPages > 1
+    ? `<option value="toutes">Toutes les pages (${piece.nbPages}) — archive ZIP</option>` +
+      piece.pages.map((_, i) => `<option value="${i}">Page ${i + 1} seulement</option>`).join('')
+    : `<option value="0">Page unique</option>`;
+
+  segFormat.valeur = 'pdf';
+  $('#extension').textContent = '.pdf';
+  $('#champPages').hidden = true;
+
+  $('#fNom').value = sansExtension(piece.fichier.name) + ' - allege';
+
+  fenetre.returnValue = '';
+  fenetre.showModal();
+}
+
+fenetre.addEventListener('close', async () => {
+  if (fenetre.returnValue !== 'ok' || !courant) return;
+  const piece = courant;
+  const base = nomPropre($('#fNom').value.trim() || 'document');
+
+  try {
+    if (segFormat.valeur === 'pdf') {
+      telecharger(piece.pdf, base + '.pdf');
+      bravo(base + '.pdf enregistré.');
+      return;
+    }
+
+    const choix = piece.nbPages > 1 ? $('#fPages').value : '0';
+
+    if (choix === 'toutes') {
+      dire('Assemblage de l’archive…');
+      const largeur = String(piece.pages.length).length;
+      const zip = await creerZip(piece.pages.map((p, i) => ({
+        nom: `${base} - ${String(i + 1).padStart(Math.max(2, largeur), '0')}.jpg`,
+        donnees: p.blob,
+      })));
+      telecharger(zip, base + '.zip');
+      bravo(`${piece.pages.length} images enregistrées dans ${base}.zip`);
+    } else {
+      const n = +choix;
+      const suffixe = piece.nbPages > 1 ? ` - ${String(n + 1).padStart(2, '0')}` : '';
+      telecharger(piece.pages[n].blob, base + suffixe + '.jpg');
+      bravo(base + suffixe + '.jpg enregistré.');
+    }
+  } catch (e) {
+    rater("L'enregistrement a échoué : " + e.message);
+  }
+});
+
+/* Entrée dans le champ du nom : on enregistre plutôt que de fermer. */
+$('#fNom').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); $('#btnLivrer').click(); }
+});
+
+$('#piedInfo').textContent = 'Compression locale, sans envoi';
+rafraichir();
+</script>
+
+</body>
+</html>

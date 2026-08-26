@@ -17,6 +17,7 @@ filigrane sur le résultat.
 | Outil | Ce qu'il fait |
 |---|---|
 | **Chemise** | Assemble photos, scans et PDF en un seul dossier PDF. Cartes d'identité à taille réelle, planches contact, recto/verso, numérotation, traits de coupe. |
+| **Presse** | Allège un PDF trop lourd. Trois niveaux de compression, conversion en niveaux de gris, livraison en PDF ou en JPG (archive ZIP pour plusieurs pages) avec le nom de votre choix. |
 | **Poinçon** | QR codes présentables : Wi-Fi, contact vCard, lien, e-mail, SMS. Logo au centre, dégradés, formes de modules, export PNG haute définition et SVG. |
 | **Sillon** | Extrait la piste audio d'une vidéo. Copie directe sans réencoder quand c'est possible : qualité identique, résultat quasi instantané. |
 | **Alambic** | Convertit audio, vidéo et images. Les vocaux WhatsApp en MP3, une vidéo en MP4 lisible partout, un JPEG en PNG. Traitement en lot. |
