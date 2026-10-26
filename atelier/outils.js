@@ -105,6 +105,15 @@ export const OUTILS = [
     icone: i('<path d="M4 4h16"/><path d="M4 20h16"/><path d="M8 9h8v6H8z"/><path d="M12 9V6M12 18v-3"/>'),
   },
   {
+    cle: 'tamis', rayon: 'documents', etat: 'pret',
+    nom: 'Tamis',
+    sous: 'Extraire les photos de plusieurs PDF',
+    detail: 'Chaque image à sa taille réelle, les JPEG recopiés sans perte. ' +
+            'Icônes et doublons écartés, une archive rangée par document.',
+    href: 'outils/tamis/',
+    icone: i('<path d="M3 8h18l-3 8H6z"/><path d="M8 11.5h8" stroke-dasharray="1 2.4"/><circle cx="10" cy="20" r="1.2"/><circle cx="14" cy="20.5" r="1.2"/>'),
+  },
+  {
     cle: 'soudure', rayon: 'media', etat: 'chantier',
     nom: 'Soudure',
     sous: 'Coller plusieurs audios ou vidéos bout à bout',

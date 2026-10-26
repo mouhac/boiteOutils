@@ -18,6 +18,7 @@ filigrane sur le résultat.
 |---|---|
 | **Chemise** | Assemble photos, scans et PDF en un seul dossier PDF. Cartes d'identité à taille réelle, planches contact, recto/verso, numérotation, traits de coupe. |
 | **Presse** | Allège un PDF trop lourd. Trois niveaux de compression, conversion en niveaux de gris, livraison en PDF ou en JPG (archive ZIP pour plusieurs pages) avec le nom de votre choix. |
+| **Tamis** | Extrait les photos d'un ou plusieurs PDF, à leur taille réelle. Les JPEG sortent intacts (copie octet pour octet), le reste en PNG avec sa transparence. Icônes et doublons écartés, une archive ZIP avec un dossier par document. |
 | **Poinçon** | QR codes présentables : Wi-Fi, contact vCard, lien, e-mail, SMS. Logo au centre, dégradés, formes de modules, export PNG haute définition et SVG. |
 | **Sillon** | Extrait la piste audio d'une vidéo. Copie directe sans réencoder quand c'est possible : qualité identique, résultat quasi instantané. |
 | **Alambic** | Convertit audio, vidéo et images. Les vocaux WhatsApp en MP3, une vidéo en MP4 lisible partout, un JPEG en PNG. Traitement en lot. |
@@ -110,7 +111,7 @@ atelier/
   moteur.js              ffmpeg.wasm partagé — chargement, exécution, analyse
   vendor/                7 Ko de code tiers qui doit être servi en local
 outils/
-  chemise/  poincon/  sillon/  alambic/  gomme/
+  chemise/  presse/  tamis/  poincon/  sillon/  alambic/  gomme/
 compagnon/
   filet.py               Le téléchargeur
   index.html             Son mode d'emploi
@@ -120,7 +121,7 @@ compagnon/
 
 Chargées depuis un CDN, au moment où elles servent :
 
-- **pdf-lib** et **pdf.js** — lecture et écriture de PDF (Chemise)
+- **pdf-lib** et **pdf.js** — lecture et écriture de PDF (Chemise, Presse, Tamis)
 - **Sortable** — réorganisation par glisser-déposer (Chemise)
 - **qr-code-styling** — rendu des QR codes (Poinçon)
 - **ffmpeg.wasm** — audio et vidéo (Sillon, Alambic, Gomme)

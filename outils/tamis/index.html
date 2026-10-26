@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tamis — extraire les photos de PDF</title>
+<meta name="description" content="Récupérer les photos et images contenues dans un ou plusieurs PDF, à leur qualité d'origine. Archive ZIP rangée par document. Tout se passe dans le navigateur.">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="stylesheet" href="../../atelier/atelier.css">
+<style>
+  .rang-item.fini{border-color:#A8DCD0}
+  .rang-item.rate{border-color:#EBB3AB}
+  .rang-item.vide-doc{border-color:#EBD08A}
+  .rang-item.choisi{box-shadow:0 0 0 2px var(--repere) inset}
+
+  .note-methode{
+    border:1px solid var(--trait);border-left:2px solid var(--repere);
+    border-radius:var(--r);background:var(--creme);
+    padding:13px 15px;font-size:12.5px;line-height:1.6;color:var(--craie-2);
+    margin-bottom:18px;
+  }
+  .note-methode b{color:var(--craie);font-weight:600}
+  .note-methode p{margin:0 0 7px}
+  .note-methode p:last-child{margin:0}
+
+  #apercu{margin-top:26px}
+  .piece{cursor:pointer}
+  .piece .vue{height:140px}
+  .piece .kind b{color:var(--repere);font-weight:600}
+
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="brand" href="../../">
+    <svg class="mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <path d="M5 12h30l-5 14H10z" fill="#FFD34D"/>
+      <path d="M5 12h30" stroke="#F2B705" stroke-width="3" stroke-linecap="round"/>
+      <path d="M13 17h14M15 21h10" stroke="#F2B705" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="1.5 2.5"/>
+      <circle cx="16" cy="32" r="2.2" fill="#5FD3B8"/>
+      <circle cx="24" cy="33" r="2.2" fill="#5FD3B8"/>
+    </svg>
+    <div>
+      <h1>Tamis</h1>
+      <p>Extraire les photos de vos PDF</p>
+    </div>
+  </a>
+  <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
+  <div class="readout" id="readout">Aucun fichier</div>
+  <button class="btn btn-go" id="btnGo" disabled>Extraire</button>
+</header>
+
+<div class="shell">
+
+  <!-- ======================= RÉGLAGES ======================= -->
+  <aside class="panel">
+
+    <details class="grp" open>
+      <summary>Tri</summary>
+      <div class="grp-body">
+        <div class="field">
+          <label for="fMin">Taille minimale</label>
+          <select id="fMin">
+            <option value="0">Tout garder, même les icônes</option>
+            <option value="50">50 px — écarter les puces et filets</option>
+            <option value="120" selected>120 px — écarter les logos et icônes</option>
+            <option value="300">300 px — les vraies photos seulement</option>
+          </select>
+          <p class="hint">Une image plus petite que ça, en largeur ou en
+            hauteur, est laissée de côté.</p>
+        </div>
+
+        <div class="checks">
+          <label class="chk"><input type="checkbox" id="optDoublons" checked><span>Ne garder qu'un exemplaire des images répétées (un logo sur chaque page, par exemple)</span></label>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp" open>
+      <summary>Format</summary>
+      <div class="grp-body">
+        <div class="field">
+          <div class="seg col" id="segFormat">
+            <button data-v="origine" class="on">D'origine — JPEG intact, le reste en PNG</button>
+            <button data-v="png">Tout en PNG — sans perte</button>
+            <button data-v="jpg">Tout en JPG — plus léger</button>
+          </div>
+          <p class="hint">« D'origine » recopie les photos JPEG octet pour octet :
+            aucune perte, aucune recompression.</p>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp">
+      <summary>Journal technique</summary>
+      <div class="grp-body">
+        <div class="journal" id="journal">En attente…</div>
+        <button class="btn btn-mini" id="btnVider">Vider</button>
+      </div>
+    </details>
+
+  </aside>
+
+  <!-- ======================= PLATEAU ======================= -->
+  <main class="mat">
+
+    <div class="note-methode">
+      <p><b>Comment ça marche.</b> Le Tamis ouvre chaque PDF et récupère les
+        images telles qu'elles y ont été rangées, à leur taille réelle — ce n'est
+        pas une capture d'écran de la page.</p>
+      <p>Un <b>scan</b> donne une image par page : c'est normal, la page entière
+        est une photo. Un PDF fait sur ordinateur, sans image, n'a rien à donner.</p>
+    </div>
+
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des PDF">
+      <svg class="drop-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+        <path d="M14 2v5h5"/><circle cx="10" cy="12" r="1.6"/><path d="m6 19 4-4 3 2 2-2 3 3"/>
+      </svg>
+      <h2 class="drop-t">Déposez vos PDF</h2>
+      <p class="drop-s">
+        Catalogues, rapports, scans, albums. Autant de fichiers que vous
+        voulez — chacun aura son dossier dans l'archive.
+      </p>
+      <span class="fauxbtn">Choisir des fichiers</span>
+      <p class="drop-f">Rien n'est envoyé sur internet</p>
+    </div>
+
+    <div class="section-head" id="teteLot" hidden>
+      <h2>Documents</h2>
+      <span class="count" id="compte">0</span>
+      <div class="tools">
+        <button class="btn btn-mini" id="btnTout" hidden>Tout télécharger</button>
+        <button class="btn btn-mini" id="btnVidez">Tout retirer</button>
+      </div>
+    </div>
+
+    <ul class="rangs" id="lot"></ul>
+
+    <section id="apercu" hidden>
+      <div class="section-head">
+        <h2 id="titreApercu">Images</h2>
+        <span class="count" id="compteApercu">0</span>
+      </div>
+      <ul class="grid" id="grille"></ul>
+    </section>
+
+  </main>
+</div>
+
+<footer class="pied">
+  <span><b>Tamis</b> — L'Atelier</span>
+  <span>Vos documents ne quittent pas cet onglet</span>
+  <span id="piedInfo"></span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script type="module">
+import { $, dire, bravo, rater, poids, sansExtension, telecharger, zoneDepot,
+         segment, journal, verrouFermeture, nomPropre } from '../../atelier/ui.js';
+import { creerZip } from '../../atelier/zip.js';
+
+/* ------------------------------------------------------------------ */
+/* Bibliothèques                                                       */
+/* ------------------------------------------------------------------ */
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+const pretes = () => !!(window.PDFLib && window.pdfjsLib);
+
+const jrn = journal($('#journal'));
+const segFormat = segment($('#segFormat'));
+$('#btnVider').addEventListener('click', () => jrn.vider());
+
+const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+const deux = (n) => String(n).padStart(2, '0');
+
+/* ------------------------------------------------------------------ */
+/* État                                                                */
+/* ------------------------------------------------------------------ */
+let lot = [];
+let compteur = 0;
+let enCours = false;
+let affiche = null;          // document dont les images sont à l'écran
+
+zoneDepot($('#drop'), ajouter, { accepte: 'application/pdf,.pdf' });
+
+function ajouter(fichiers) {
+  for (const f of fichiers) {
+    if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') {
+      rater(`« ${f.name} » n'est pas un PDF — ignoré.`);
+      continue;
+    }
+    lot.push({ id: ++compteur, fichier: f, etat: 'attente', part: 0,
+               images: [], message: '', nbPages: 0, ecartees: 0 });
+  }
+  rafraichir();
+}
+
+$('#btnVidez').addEventListener('click', () => {
+  if (enCours) { dire('Extraction en cours — patientez.'); return; }
+  lot.forEach(liberer);
+  lot = [];
+  montrer(null);
+  rafraichir();
+});
+
+function liberer(piece) {
+  for (const im of piece.images) if (im.url) URL.revokeObjectURL(im.url);
+  piece.images = [];
+}
+
+/* ------------------------------------------------------------------ */
+/* Affichage                                                           */
+/* ------------------------------------------------------------------ */
+const echapper = (s) => String(s).replace(/[&<>"]/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const poidsImages = (piece) => piece.images.reduce((s, im) => s + im.blob.size, 0);
+
+function rafraichir() {
+  $('#teteLot').hidden = !lot.length;
+  $('#compte').textContent = lot.length;
+  $('#btnGo').disabled = !lot.length || enCours;
+
+  const finis = lot.filter((p) => p.etat === 'fini' && p.images.length);
+  $('#btnTout').hidden = finis.length < 2;
+
+  const total = lot.reduce((s, p) => s + p.fichier.size, 0);
+  $('#readout').innerHTML = lot.length
+    ? `<b>${lot.length}</b> document${lot.length > 1 ? 's' : ''} · ${poids(total)}`
+    : 'Aucun fichier';
+
+  $('#lot').innerHTML = lot.map((p, n) => {
+    const vide = p.etat === 'fini' && !p.images.length;
+    const cl = p.etat === 'rate' ? ' rate' : vide ? ' vide-doc'
+      : p.etat === 'fini' ? ' fini' : '';
+
+    let sous;
+    if (p.etat === 'fini') {
+      sous = `${pluriel(p.nbPages, 'page')} · ` +
+             (p.images.length
+               ? `${pluriel(p.images.length, 'image')} · ${poids(poidsImages(p))}`
+               : 'aucune image') +
+             (p.ecartees ? ` · ${p.ecartees} écartée${p.ecartees > 1 ? 's' : ''}` : '') +
+             (p.secours ? ' · mode de secours' : '');
+    } else {
+      sous = p.message || poids(p.fichier.size);
+    }
+
+    const etat = p.etat === 'travail' ? `${Math.round(p.part * 100)} %`
+      : p.etat === 'fini' ? (vide ? 'rien trouvé' : pluriel(p.images.length, 'image'))
+      : p.etat === 'rate' ? 'échec' : '';
+
+    return `
+      <li class="rang-item${cl}${affiche === p ? ' choisi' : ''}" data-id="${p.id}">
+        <span class="no">${deux(n + 1)}</span>
+        <span class="txt">
+          <span class="nm">${echapper(p.fichier.name)}</span>
+          <span class="sub">${echapper(sous)}</span>
+        </span>
+        <span class="etat ${p.etat === 'fini' && !vide ? 'ok' : p.etat === 'rate' ? 'err' : ''}">${etat}</span>
+        <span class="acts">
+          ${p.images.length ? `<button class="btn btn-mini" data-a="voir">Voir</button>
+          <button class="btn btn-mini" data-a="dl">Télécharger</button>` : ''}
+          <button data-a="del" class="del" title="Retirer" aria-label="Retirer">&#10005;</button>
+        </span>
+        <i class="jauge" style="width:${p.etat === 'travail' ? p.part * 100 : p.etat === 'fini' ? 100 : 0}%"></i>
+      </li>`;
+  }).join('');
+}
+
+$('#lot').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-a]');
+  if (!b) return;
+  const p = lot.find((x) => x.id === +b.closest('.rang-item').dataset.id);
+  if (!p) return;
+
+  if (b.dataset.a === 'voir') montrer(p);
+  else if (b.dataset.a === 'dl') livrerDocument(p);
+  else if (b.dataset.a === 'del') {
+    if (enCours && p.etat === 'travail') { dire('Ce document est en cours de traitement.'); return; }
+    liberer(p);
+    lot = lot.filter((x) => x.id !== p.id);
+    if (affiche === p) montrer(null);
+    rafraichir();
+  }
+});
+
+function montrer(piece) {
+  affiche = piece && piece.images.length ? piece : null;
+  $('#apercu').hidden = !affiche;
+  if (!affiche) { $('#grille').innerHTML = ''; rafraichir(); return; }
+
+  $('#titreApercu').textContent = affiche.fichier.name;
+  $('#compteApercu').textContent = affiche.images.length;
+  $('#grille').innerHTML = affiche.images.map((im, i) => `
+    <li class="piece" data-i="${i}" tabindex="0" title="Cliquer pour télécharger cette image">
+      <div class="vue"><img src="${im.url}" alt="" loading="lazy"></div>
+      <div class="meta">
+        <div class="nm">${echapper(im.nom)}</div>
+        <div class="kind">${im.largeur} × ${im.hauteur} · ${poids(im.blob.size)}${im.intacte ? ' · <b>intacte</b>' : ''}</div>
+      </div>
+    </li>`).join('');
+  rafraichir();
+}
+
+$('#grille').addEventListener('click', (e) => {
+  const li = e.target.closest('.piece');
+  if (!li || !affiche) return;
+  const im = affiche.images[+li.dataset.i];
+  telecharger(im.blob, `${sansExtension(affiche.fichier.name)} - ${im.nom}`);
+});
+$('#grille').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.closest('.piece')) e.target.click();
+});
+
+/* ------------------------------------------------------------------ */
+/* Extraction                                                          */
+/* ------------------------------------------------------------------ */
+$('#btnGo').addEventListener('click', lancer);
+
+async function lancer() {
+  if (enCours) return;
+  if (!pretes()) {
+    rater("Les bibliothèques PDF n'ont pas pu être chargées. Rechargez la page.");
+    return;
+  }
+  const aFaire = lot.filter((p) => p.etat !== 'fini');
+  if (!aFaire.length) { dire('Tout est déjà extrait.'); return; }
+
+  enCours = true;
+  verrouFermeture(true);
+  $('#btnGo').disabled = true;
+  $('#btnGo').textContent = 'Extraction…';
+
+  let trouvees = 0;
+  let reussis = 0;
+  for (const piece of aFaire) {
+    try {
+      await extraire(piece);
+      trouvees += piece.images.length;
+      reussis++;
+      if (piece.images.length && (!affiche || affiche.etat !== 'fini')) montrer(piece);
+    } catch (e) {
+      piece.etat = 'rate';
+      piece.message = e.message;
+      jrn.ecrire(`[${piece.fichier.name}] ÉCHEC — ${e.message}`);
+    }
+    rafraichir();
+  }
+
+  enCours = false;
+  verrouFermeture(false);
+  $('#btnGo').textContent = 'Extraire';
+  rafraichir();
+
+  if (trouvees) bravo(`${pluriel(trouvees, 'image')} trouvée${trouvees > 1 ? 's' : ''} dans ${pluriel(reussis, 'document')}.`);
+  else if (reussis) dire('Aucune image à cette taille dans ces documents.');
+  else rater("Aucun document n'a pu être lu — voir le journal technique.");
+}
+
+async function extraire(piece) {
+  piece.etat = 'travail';
+  piece.part = 0;
+  piece.message = '';
+  piece.ecartees = 0;
+  piece.secours = false;
+  liberer(piece);
+  rafraichir();
+
+  const avancer = (part) => {
+    piece.part = Math.min(0.999, part);
+    const li = document.querySelector(`.rang-item[data-id="${piece.id}"]`);
+    if (li) {
+      li.querySelector('.jauge').style.width = (piece.part * 100) + '%';
+      li.querySelector('.etat').textContent = Math.round(piece.part * 100) + ' %';
+    }
+  };
+
+  const octets = new Uint8Array(await piece.fichier.arrayBuffer());
+  const reglages = {
+    min: +$('#fMin').value,
+    doublons: $('#optDoublons').checked,
+    format: segFormat.valeur,
+  };
+
+  let src;
+  try {
+    src = await window.PDFLib.PDFDocument.load(octets, { updateMetadata: false });
+  } catch (e) {
+    if (!/encrypt/i.test(e.message || e.name)) throw new Error('PDF illisible ou abîmé.');
+    // Un PDF protégé se lit, mais ses flux sont chiffrés : seul pdf.js sait
+    // les déchiffrer. On passe par lui, au prix de l'intégrité des JPEG.
+    jrn.ecrire(`[${piece.fichier.name}] PDF protégé — mode de secours`);
+    piece.secours = true;
+    await extraireSecours(piece, octets, reglages, avancer);
+    terminer(piece);
+    return;
+  }
+
+  const trouvees = inventaire(src);
+  piece.nbPages = src.getPageCount();
+  jrn.ecrire(`[${piece.fichier.name}] ${pluriel(piece.nbPages, 'page')} · ` +
+             `${pluriel(trouvees.length, 'image')} référencée${trouvees.length > 1 ? 's' : ''}`);
+
+  /* ---- Tri : taille, masques, doublons ---------------------------- */
+  const vues = new Set();
+  const gardees = [];
+  for (const im of trouvees) {
+    if (im.masque || im.largeur < reglages.min || im.hauteur < reglages.min) {
+      piece.ecartees++;
+      continue;
+    }
+    if (reglages.doublons) {
+      const empreinte = `${im.largeur}x${im.hauteur}:${hacher(im.flux.contents)}`;
+      if (vues.has(empreinte)) continue;
+      vues.add(empreinte);
+    }
+    gardees.push(im);
+  }
+
+  /* ---- JPEG recopiés tels quels, le reste redessiné par pdf.js ---- */
+  const aDessiner = [];
+  const parPage = new Map();
+  for (const im of gardees) {
+    const rang = (parPage.get(im.page) || 0) + 1;
+    parPage.set(im.page, rang);
+    im.nom = `page ${deux(im.page)} - ${deux(rang)}`;
+
+    if (reglages.format !== 'png' && jpegIntact(im.flux)) {
+      im.blob = new Blob([im.flux.contents], { type: 'image/jpeg' });
+      im.nom += '.jpg';
+      im.intacte = true;
+    } else {
+      aDessiner.push(im);
+    }
+  }
+  avancer(0.1);
+
+  if (aDessiner.length) {
+    await dessiner(src, aDessiner, reglages.format === 'jpg' ? 'jpg' : 'png',
+                   (p) => avancer(0.1 + p * 0.9));
+  }
+
+  piece.images = gardees.filter((im) => im.blob).map((im) => ({
+    nom: im.nom, blob: im.blob, largeur: im.largeur, hauteur: im.hauteur,
+    intacte: !!im.intacte, url: URL.createObjectURL(im.blob),
+  }));
+  terminer(piece);
+}
+
+function terminer(piece) {
+  piece.etat = 'fini';
+  piece.part = 1;
+  jrn.ecrire(`[${piece.fichier.name}] ${pluriel(piece.images.length, 'image')} · ` +
+             `${poids(poidsImages(piece))}` +
+             (piece.ecartees ? ` · ${piece.ecartees} trop petite(s) ou masque(s)` : ''));
+}
+
+/* ------------------------------------------------------------------ */
+/* Inventaire : parcourir les pages et leurs ressources               */
+/* ------------------------------------------------------------------ */
+/**
+ * Liste les images réellement utilisées, page par page, dans l'ordre.
+ * Une image partagée entre plusieurs pages n'apparaît qu'une fois, sur la
+ * première où on la croise. On descend dans les formulaires (« Form
+ * XObject ») : c'est là que les logiciels de mise en page rangent souvent
+ * leurs photos.
+ */
+function inventaire(src) {
+  const { PDFName, PDFDict, PDFRawStream, PDFRef } = window.PDFLib;
+  const N = (s) => PDFName.of(s);
+  const ctx = src.context;
+  const dejaVues = new Set();
+  const sortie = [];
+
+  const parcourir = (ressources, page, profondeur) => {
+    if (!(ressources instanceof PDFDict) || profondeur > 12) return;
+    const objets = ressources.lookupMaybe(N('XObject'), PDFDict);
+    if (!objets) return;
+
+    for (const [, valeur] of objets.entries()) {
+      const cle = valeur instanceof PDFRef ? valeur.toString() : null;
+      if (cle && dejaVues.has(cle)) continue;
+      if (cle) dejaVues.add(cle);
+
+      const flux = ctx.lookup(valeur);
+      if (!(flux instanceof PDFRawStream)) continue;
+      const genre = flux.dict.lookup(N('Subtype'));
+
+      if (genre === N('Image')) {
+        const nombre = (k) => flux.dict.lookup(N(k))?.asNumber?.() || 0;
+        sortie.push({
+          flux, page,
+          largeur: nombre('Width'),
+          hauteur: nombre('Height'),
+          // Un masque au pochoir se dessine avec la couleur de remplissage
+          // courante : seul, ce n'est qu'une silhouette noire.
+          masque: flux.dict.lookup(N('ImageMask'))?.asBoolean?.() === true,
+        });
+      } else if (genre === N('Form')) {
+        parcourir(flux.dict.lookup(N('Resources')), page, profondeur + 1);
+      }
+    }
+  };
+
+  src.getPages().forEach((p, i) => parcourir(p.node.Resources(), i + 1, 0));
+  return sortie;
+}
+
+/**
+ * Un JPEG peut sortir du PDF tel quel s'il n'a besoin de rien d'autre pour
+ * s'afficher juste : pas de masque de transparence, pas de table de
+ * décodage, et un espace de couleur que les visionneuses comprennent. Les
+ * JPEG CMJN, fréquents en imprimerie, sortent souvent inversés une fois
+ * extraits : ceux-là, on les fait redessiner par pdf.js.
+ */
+function jpegIntact(flux) {
+  const { PDFName, PDFArray, PDFRawStream } = window.PDFLib;
+  const N = (s) => PDFName.of(s);
+  const d = flux.dict;
+
+  const filtre = d.lookup(N('Filter'));
+  const filtres = filtre instanceof PDFArray ? filtre.asArray().map((f) => d.context.lookup(f)) : [filtre];
+  if (filtres.length !== 1 || filtres[0] !== N('DCTDecode')) return false;
+  if (d.lookup(N('SMask')) || d.lookup(N('Mask')) || d.lookup(N('Decode'))) return false;
+
+  const cs = d.lookup(N('ColorSpace'));
+  if (cs === N('DeviceRGB') || cs === N('DeviceGray') || cs === undefined) return true;
+  if (cs instanceof PDFArray) {
+    const famille = d.context.lookup(cs.get(0));
+    if (famille === N('CalRGB') || famille === N('CalGray')) return true;
+    if (famille === N('ICCBased')) {
+      const profil = d.context.lookup(cs.get(1));
+      const composantes = profil instanceof PDFRawStream
+        ? profil.dict.lookup(N('N'))?.asNumber?.() : 0;
+      return composantes === 1 || composantes === 3;
+    }
+  }
+  return false;
+}
+
+/** FNV-1a sur les octets bruts : assez pour repérer deux copies identiques. */
+function hacher(octets) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < octets.length; i++) {
+    h ^= octets[i];
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16) + ':' + octets.length;
+}
+
+/* ------------------------------------------------------------------ */
+/* Redessiner les images qui ne peuvent pas sortir telles quelles      */
+/* ------------------------------------------------------------------ */
+/* Un onglet plafonne la taille d'un canevas : au-delà, il rend du vide. */
+const COTE_MAX = 16000;
+const SURFACE_MAX = 60e6;
+
+/**
+ * Les images compressées autrement qu'en JPEG (Flate, JBIG2, CCITT,
+ * JPEG 2000…) ou accompagnées d'un masque de transparence ne sont pas des
+ * fichiers lisibles en l'état. Plutôt que de réécrire tous ces décodeurs,
+ * on fabrique un petit PDF où chaque image occupe seule une page à sa
+ * taille exacte (1 point = 1 pixel), et pdf.js la dessine : les couleurs,
+ * la transparence et les formats exotiques sont gérés comme à l'affichage.
+ */
+async function dessiner(src, images, format, surAvancement) {
+  const { PDFDocument, PDFName, PDFObjectCopier,
+          pushGraphicsState, popGraphicsState,
+          concatTransformationMatrix, drawObject } = window.PDFLib;
+
+  const mini = await PDFDocument.create();
+  const copieur = PDFObjectCopier.for(src.context, mini.context);
+  for (const im of images) {
+    const ref = mini.context.register(copieur.copy(im.flux));
+    const page = mini.addPage([im.largeur, im.hauteur]);
+    page.node.setXObject(PDFName.of('Im0'), ref);
+    page.pushOperators(
+      pushGraphicsState(),
+      concatTransformationMatrix(im.largeur, 0, 0, im.hauteur, 0, 0),
+      drawObject('Im0'),
+      popGraphicsState(),
+    );
+  }
+
+  const doc = await window.pdfjsLib.getDocument({ data: await mini.save() }).promise;
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d');
+
+  try {
+    for (let i = 0; i < images.length; i++) {
+      const im = images[i];
+      const page = await doc.getPage(i + 1);
+
+      const bride = Math.min(1, COTE_MAX / im.largeur, COTE_MAX / im.hauteur,
+                             Math.sqrt(SURFACE_MAX / (im.largeur * im.hauteur)));
+      if (bride < 1) {
+        jrn.ecrire(`${im.nom} : ${im.largeur}×${im.hauteur} dépasse ce que l'onglet ` +
+                   `peut dessiner — réduite à ${Math.round(bride * 100)} %`);
+      }
+      const vue = page.getViewport({ scale: bride });
+      toile.width = Math.max(1, Math.round(vue.width));
+      toile.height = Math.max(1, Math.round(vue.height));
+      ctx.clearRect(0, 0, toile.width, toile.height);
+
+      // Le JPEG ne connaît pas la transparence : sans fond blanc, elle noircit.
+      // En PNG, on la garde : fond transparent, pdf.js ne peint pas de blanc.
+      if (format === 'jpg') {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, toile.width, toile.height);
+      }
+
+      // « print » : le mode affichage dépend de requestAnimationFrame, qui se
+      // fige dans un onglet en arrière-plan (voir Presse).
+      await page.render({
+        canvasContext: ctx, viewport: vue, intent: 'print',
+        background: 'rgba(0,0,0,0)',
+      }).promise;
+      page.cleanup();
+
+      const blob = await new Promise((r) =>
+        toile.toBlob(r, format === 'jpg' ? 'image/jpeg' : 'image/png', 0.92));
+      if (blob) {
+        im.blob = blob;
+        im.nom += format === 'jpg' ? '.jpg' : '.png';
+        im.largeur = toile.width;
+        im.hauteur = toile.height;
+      } else {
+        jrn.ecrire(`${im.nom} : encodage impossible — ignorée`);
+      }
+
+      surAvancement((i + 1) / images.length);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } finally {
+    doc.destroy();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Mode de secours : PDF protégé, lu par pdf.js seul                   */
+/* ------------------------------------------------------------------ */
+/**
+ * pdf.js décode lui-même les images en lisant chaque page. On récupère ces
+ * pixels et on les réencode : on perd la copie octet pour octet des JPEG,
+ * mais on obtient quand même chaque image à sa taille réelle.
+ */
+async function extraireSecours(piece, octets, reglages, surAvancement) {
+  const { OPS } = window.pdfjsLib;
+  const doc = await window.pdfjsLib.getDocument({ data: octets }).promise;
+  piece.nbPages = doc.numPages;
+  const format = reglages.format === 'jpg' ? 'jpg' : 'png';
+  const vues = new Set();
+  const images = [];
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d');
+
+  const objet = (page, nom) => new Promise((r) => {
+    const reserve = nom.startsWith('g_') ? page.commonObjs : page.objs;
+    reserve.get(nom, r);
+  });
+
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const ops = await page.getOperatorList();
+      const noms = new Set();
+      ops.fnArray.forEach((fn, i) => {
+        if (fn === OPS.paintImageXObject || fn === OPS.paintImageXObjectRepeat) {
+          noms.add(ops.argsArray[i][0]);
+        }
+      });
+
+      let rang = 0;
+      for (const nom of noms) {
+        const im = await objet(page, nom);
+        if (!im || !im.width) continue;
+        if (im.width < reglages.min || im.height < reglages.min) { piece.ecartees++; continue; }
+
+        toile.width = im.width;
+        toile.height = im.height;
+        ctx.clearRect(0, 0, im.width, im.height);
+        if (format === 'jpg') { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, im.width, im.height); }
+        if (im.bitmap) ctx.drawImage(im.bitmap, 0, 0);
+        else ctx.putImageData(versRGBA(im), 0, 0);
+
+        if (reglages.doublons) {
+          const echantillon = ctx.getImageData(0, 0, Math.min(64, im.width), Math.min(64, im.height)).data;
+          const empreinte = `${im.width}x${im.height}:${hacher(echantillon)}`;
+          if (vues.has(empreinte)) continue;
+          vues.add(empreinte);
+        }
+
+        const blob = await new Promise((r) =>
+          toile.toBlob(r, format === 'jpg' ? 'image/jpeg' : 'image/png', 0.92));
+        if (!blob) continue;
+        rang++;
+        const nomFichier = `page ${deux(n)} - ${deux(rang)}.${format}`;
+        images.push({ nom: nomFichier, blob, largeur: im.width, hauteur: im.height,
+                      intacte: false, url: URL.createObjectURL(blob) });
+      }
+      page.cleanup();
+      surAvancement(n / doc.numPages);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } finally {
+    doc.destroy();
+  }
+  piece.images = images;
+}
+
+/** Les trois formes de pixels que pdf.js peut rendre, ramenées en RGBA. */
+function versRGBA({ width, height, kind, data }) {
+  const sortie = new ImageData(width, height);
+  const d = sortie.data;
+  if (kind === 3) {                                 // RGBA 32 bits
+    d.set(data.subarray(0, d.length));
+  } else if (kind === 2) {                          // RGB 24 bits
+    for (let i = 0, j = 0; i < d.length; i += 4, j += 3) {
+      d[i] = data[j]; d[i + 1] = data[j + 1]; d[i + 2] = data[j + 2]; d[i + 3] = 255;
+    }
+  } else {                                          // 1 bit, lignes alignées sur l'octet
+    const parLigne = (width + 7) >> 3;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const v = (data[y * parLigne + (x >> 3)] >> (7 - (x & 7))) & 1 ? 255 : 0;
+        const i = (y * width + x) * 4;
+        d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+      }
+    }
+  }
+  return sortie;
+}
+
+/* ------------------------------------------------------------------ */
+/* Livraison                                                           */
+/* ------------------------------------------------------------------ */
+async function livrerDocument(piece) {
+  const base = nomPropre(sansExtension(piece.fichier.name), 'document');
+  try {
+    if (piece.images.length === 1) {
+      const im = piece.images[0];
+      telecharger(im.blob, `${base} - ${im.nom}`);
+      bravo('Image enregistrée.');
+      return;
+    }
+    dire('Assemblage de l’archive…');
+    const zip = await creerZip(piece.images.map((im) => ({ nom: im.nom, donnees: im.blob })));
+    telecharger(zip, `${base} - images.zip`);
+    bravo(`${pluriel(piece.images.length, 'image')} dans ${base} - images.zip`);
+  } catch (e) {
+    rater("L'enregistrement a échoué : " + e.message);
+  }
+}
+
+/* Un dossier par PDF. Deux PDF de même nom : le second prend un numéro. */
+$('#btnTout').addEventListener('click', async () => {
+  const finis = lot.filter((p) => p.etat === 'fini' && p.images.length);
+  if (!finis.length) return;
+  const dossiers = new Set();
+  const entrees = [];
+
+  for (const p of finis) {
+    const racine = nomPropre(sansExtension(p.fichier.name), 'document');
+    let dossier = racine;
+    for (let n = 2; dossiers.has(dossier); n++) dossier = `${racine} (${n})`;
+    dossiers.add(dossier);
+    for (const im of p.images) entrees.push({ nom: `${dossier}/${im.nom}`, donnees: im.blob });
+  }
+
+  try {
+    dire('Assemblage de l’archive…');
+    telecharger(await creerZip(entrees), 'images extraites.zip');
+    bravo(`${pluriel(entrees.length, 'image')} de ${pluriel(finis.length, 'document')} enregistrées.`);
+  } catch (e) {
+    rater("L'enregistrement a échoué : " + e.message);
+  }
+});
+
+$('#piedInfo').textContent = 'Extraction locale, sans envoi';
+rafraichir();
+</script>
+
+</body>
+</html>
