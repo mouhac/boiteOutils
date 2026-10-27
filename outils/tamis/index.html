@@ -45,7 +45,7 @@
     </svg>
     <div>
       <h1>Tamis</h1>
-      <p>Extraire les photos de vos PDF et PSD</p>
+      <p>Les pages et les photos de vos PDF et PSD</p>
     </div>
   </a>
   <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
@@ -59,6 +59,19 @@
   <aside class="panel">
 
     <details class="grp" open>
+      <summary>Extraire</summary>
+      <div class="grp-body">
+        <div class="field">
+          <div class="seg col" id="segMode">
+            <button data-v="pages" class="on">La page entière — le flyer complet</button>
+            <button data-v="morceaux">Les morceaux — photos et logos, un par un</button>
+          </div>
+          <p class="hint" id="motMode"></p>
+        </div>
+      </div>
+    </details>
+
+    <details class="grp" open id="grpTri" hidden>
       <summary>Tri</summary>
       <div class="grp-body">
         <div class="field">
@@ -100,8 +113,7 @@
             <button data-v="png">Tout en PNG — sans perte</button>
             <button data-v="jpg">Tout en JPG — plus léger</button>
           </div>
-          <p class="hint">« D'origine » recopie les photos JPEG octet pour octet :
-            aucune perte, aucune recompression.</p>
+          <p class="hint" id="motFormat"></p>
         </div>
       </div>
     </details>
@@ -120,14 +132,13 @@
   <main class="mat">
 
     <div class="note-methode">
-      <p><b>Comment ça marche.</b> Le Tamis récupère les images telles qu'elles
-        ont été rangées dans le fichier, à leur taille réelle — ce n'est pas une
-        capture d'écran de la page. Les bords vides sont retirés, les formes et
-        les textes colorés écartés.</p>
-      <p><b>Vous avez le fichier Photoshop (.psd) ? Déposez-le plutôt que le
-        PDF.</b> Chaque calque y est intact : la photo sort seule, détourée. Un PDF
-        enregistré depuis Photoshop a souvent fusionné la photo avec le fond — elle
-        n'y existe plus séparément.</p>
+      <p><b>La page entière</b> : chaque page d'un PDF devient une image haute
+        définition (300 dpi). Pour un fichier Photoshop, c'est l'image complète,
+        une par plan de travail — le recto et le verso séparément.</p>
+      <p><b>Les morceaux</b> : les photos et logos rangés dans le fichier, un par
+        un, à leur taille réelle. Depuis un .psd, chaque calque photo sort seul,
+        détouré. Un PDF enregistré depuis Photoshop a souvent fusionné la photo
+        avec le fond : déposez plutôt le .psd.</p>
     </div>
 
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des PDF">
@@ -183,7 +194,9 @@
 import { $, dire, bravo, rater, poids, sansExtension, telecharger, zoneDepot,
          segment, journal, verrouFermeture, nomPropre } from '../../atelier/ui.js';
 import { creerZip } from '../../atelier/zip.js';
-import { ouvrirPsd } from '../../atelier/psd.js';
+// Le numéro force le navigateur à reprendre le lecteur quand il change :
+// sans lui, une page à jour pourrait tourner avec un psd.js d'hier en cache.
+import { ouvrirPsd } from '../../atelier/psd.js?v=2';
 
 /* ------------------------------------------------------------------ */
 /* Bibliothèques                                                       */
@@ -197,6 +210,21 @@ const pretes = () => !!(window.PDFLib && window.pdfjsLib);
 const jrn = journal($('#journal'));
 const segFormat = segment($('#segFormat'));
 const segContenu = segment($('#segContenu'));
+
+/* Le tri n'a de sens que pour les morceaux ; les mots du format changent
+   selon ce qu'on extrait. */
+function majMode() {
+  const pages = segMode.valeur === 'pages';
+  $('#grpTri').hidden = pages;
+  $('#motMode').textContent = pages
+    ? 'Chaque page, ou chaque face d’un flyer Photoshop, en une image.'
+    : 'Les images rangées dans le fichier, triées : formes et textes écartés.';
+  $('#motFormat').textContent = pages
+    ? '« D’origine » et « JPG » donnent un JPEG de haute qualité ; le PNG est sans perte mais bien plus lourd.'
+    : '« D’origine » recopie les photos JPEG octet pour octet : aucune perte, aucune recompression.';
+}
+const segMode = segment($('#segMode'), majMode);
+majMode();
 $('#btnVider').addEventListener('click', () => jrn.vider());
 
 const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
@@ -280,6 +308,7 @@ function rafraichir() {
                ? `${pluriel(p.images.length, 'image')} · ${poids(poidsImages(p))}`
                : 'aucune image') +
              (p.ecartees ? ` · ${p.ecartees} écartée${p.ecartees > 1 ? 's' : ''}` : '') +
+             (p.originaux ? ` · ${p.originaux} en pleine résolution` : '') +
              (p.secours ? ' · mode de secours' : '') +
              (p.calques ? ' · PDF Photoshop : déposez le .psd pour avoir les photos seules' : '');
     } else {
@@ -422,6 +451,7 @@ async function extraire(piece) {
   piece.raisons = {};
   piece.secours = false;
   piece.calques = false;
+  piece.originaux = 0;
   liberer(piece);
   rafraichir();
 
@@ -437,9 +467,16 @@ async function extraire(piece) {
   const tampon = await piece.fichier.arrayBuffer();
   const reglages = lireReglages();
   piece.signature = signature();
+  piece.psd = estPsd(piece.fichier);
 
-  if (estPsd(piece.fichier)) {
-    piece.psd = true;
+  if (reglages.mode === 'pages') {
+    if (piece.psd) await pagesPsd(piece, tampon, reglages, avancer);
+    else await pagesPdf(piece, new Uint8Array(tampon), reglages, avancer);
+    terminer(piece);
+    return;
+  }
+
+  if (piece.psd) {
     await extrairePsd(piece, tampon, reglages, avancer);
     terminer(piece);
     return;
@@ -472,6 +509,7 @@ async function extraire(piece) {
 
 function lireReglages() {
   return {
+    mode: segMode.valeur,
     min: +$('#fMin').value,
     contenu: segContenu.valeur,
     rogner: $('#optRogner').checked,
@@ -508,7 +546,109 @@ const COTE_MAX = 16000;
 const SURFACE_MAX = 60e6;
 
 /* ------------------------------------------------------------------ */
-/* PDF : le chemin normal                                              */
+/* La page entière                                                     */
+/* ------------------------------------------------------------------ */
+const DPI_PAGE = 300;
+
+/** Encode une portion de toile ; le JPEG reçoit un fond blanc. */
+async function encoder(toile, cadre, png) {
+  const sortie = document.createElement('canvas');
+  sortie.width = cadre.l;
+  sortie.height = cadre.h;
+  const cs = sortie.getContext('2d');
+  if (!png) {
+    cs.fillStyle = '#FFFFFF';
+    cs.fillRect(0, 0, cadre.l, cadre.h);
+  }
+  cs.drawImage(toile, cadre.x, cadre.y, cadre.l, cadre.h, 0, 0, cadre.l, cadre.h);
+  const blob = await new Promise((r) =>
+    sortie.toBlob(r, png ? 'image/png' : 'image/jpeg', png ? undefined : 0.95));
+  sortie.width = sortie.height = 0;           // rend la mémoire tout de suite
+  if (!blob) throw new Error('Image trop grande pour être encodée par le navigateur.');
+  return { blob, largeur: cadre.l, hauteur: cadre.h, ext: png ? 'png' : 'jpg', intacte: false };
+}
+
+/** Chaque page du PDF, dessinée par pdf.js à 300 dpi. */
+async function pagesPdf(piece, octets, reglages, avancer) {
+  const doc = await window.pdfjsLib.getDocument({ data: octets.slice() }).promise
+    .catch(() => { throw new Error('PDF illisible, abîmé ou protégé par un mot de passe.'); });
+  piece.nbPages = doc.numPages;
+  const png = reglages.format === 'png';
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d', { alpha: false });
+  const sorties = [];
+
+  try {
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      let echelle = DPI_PAGE / 72;
+      echelle *= Math.min(1, COTE_MAX / (base.width * echelle), COTE_MAX / (base.height * echelle),
+                          Math.sqrt(SURFACE_MAX / (base.width * echelle * base.height * echelle)));
+      const vue = page.getViewport({ scale: echelle });
+      toile.width = Math.round(vue.width);
+      toile.height = Math.round(vue.height);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, toile.width, toile.height);
+      await page.render({ canvasContext: ctx, viewport: vue, intent: 'print' }).promise;
+      page.cleanup();
+
+      const res = await encoder(toile, { x: 0, y: 0, l: toile.width, h: toile.height }, png);
+      sorties.push({ ...res, nom: `page ${deux(n)}.${res.ext}` });
+      avancer(n / doc.numPages);
+      await respirer();
+    }
+  } finally {
+    doc.destroy();
+    toile.width = toile.height = 0;
+  }
+  jrn.ecrire(`[${piece.fichier.name}] ${pluriel(sorties.length, 'page')} à ${DPI_PAGE} dpi`);
+  piece.images = sorties.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
+}
+
+/**
+ * L'image complète enregistrée par Photoshop, découpée selon les plans de
+ * travail : un flyer recto-verso donne deux images. Un plan de travail posé
+ * hors du document n'a pas été enregistré dans cette image : on le signale.
+ */
+async function pagesPsd(piece, tampon, reglages, avancer) {
+  const psd = ouvrirPsd(tampon);
+  piece.nbCalques = psd.calques.filter((c) => c.genre !== 'groupe').length;
+  const image = await psd.decoderFusion();
+  avancer(0.4);
+
+  const toile = document.createElement('canvas');
+  toile.width = image.width;
+  toile.height = image.height;
+  toile.getContext('2d').putImageData(image, 0, 0);
+
+  const faces = [];
+  for (const p of psd.planches) {
+    const x = Math.max(0, p.gauche), y = Math.max(0, p.haut);
+    const l = Math.min(psd.largeur, p.droite) - x;
+    const h = Math.min(psd.hauteur, p.bas) - y;
+    if (l > 0 && h > 0) faces.push({ nom: p.nom, cadre: { x, y, l, h } });
+    else jrn.ecrire(`[${piece.fichier.name}] « ${p.nom} » est hors du document : ` +
+                    `Photoshop ne l'a pas enregistré dans l'image complète.`);
+  }
+  if (!faces.length) faces.push({ nom: 'image complète', cadre: { x: 0, y: 0, l: psd.largeur, h: psd.hauteur } });
+
+  const sorties = [];
+  for (let i = 0; i < faces.length; i++) {
+    const res = await encoder(toile, faces[i].cadre, reglages.format === 'png');
+    const nom = nomPropre(faces[i].nom, 'page').slice(0, 60);
+    sorties.push({ ...res, nom: faces.length > 1 ? `${deux(i + 1)} - ${nom}.${res.ext}` : `${nom}.${res.ext}` });
+    avancer(0.4 + 0.6 * (i + 1) / faces.length);
+    await respirer();
+  }
+  toile.width = toile.height = 0;
+  jrn.ecrire(`[${piece.fichier.name}] ${psd.largeur}×${psd.hauteur} · ${psd.mode} · ` +
+             `${pluriel(sorties.length, 'face')}`);
+  piece.images = sorties.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
+}
+
+/* ------------------------------------------------------------------ */
+/* PDF : les morceaux                                                  */
 /* ------------------------------------------------------------------ */
 /** pdf-lib inventorie les images ; les JPEG peuvent sortir intacts. */
 async function extraireDirect(piece, octets, reglages, avancer) {
@@ -845,9 +985,16 @@ async function extrairePsd(piece, tampon, reglages, avancer) {
       toile.height = image.height;
       ctx.putImageData(image, 0, 0);
 
-      const res = await finaliser(toile, reglages);
+      // On juge sur les pixels du calque, tels qu'ils apparaissent sur le
+      // flyer ; mais on livre l'original s'il est plus net.
+      let res = await finaliser(toile, reglages);
       if (res.ecartee) ecarter(piece, res.ecartee);
       else {
+        const original = await versionOriginale(psd.original(c), res, reglages);
+        if (original) {
+          piece.originaux = (piece.originaux || 0) + 1;
+          res = original;
+        }
         const nom = nomPropre(c.nom, 'calque').slice(0, 60);
         sorties.push({ ...res, nom: `${deux(sorties.length + 1)} - ${nom}.${res.ext}` });
       }
@@ -859,6 +1006,79 @@ async function extrairePsd(piece, tampon, reglages, avancer) {
   }
 
   piece.images = sorties.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
+}
+
+/**
+ * Le fichier d'origine d'un objet dynamique, s'il est plus net que ce que
+ * montre le flyer. Un logo réduit à 150 pixels sur l'affiche a souvent été
+ * placé depuis un fichier de 1 500 : c'est celui-là qu'on veut.
+ *
+ * PNG, JPEG, GIF, WebP et SVG sortent tels quels, octet pour octet. Un
+ * document Photoshop embarqué est rouvert, et son image complète encodée.
+ */
+async function versionOriginale(original, calque, reglages, profondeur = 0) {
+  if (!original || profondeur > 2) return null;
+  try {
+    if (original.ext === 'svg') {
+      // Du dessin vectoriel : net à n'importe quelle taille.
+      return { blob: new Blob([original.octets], { type: original.type }),
+               largeur: calque.largeur, hauteur: calque.hauteur, ext: 'svg', intacte: true };
+    }
+
+    if (original.ext === 'psd') {
+      const imbrique = ouvrirPsd(original.octets.slice().buffer);
+      const toile = document.createElement('canvas');
+      const ctx = toile.getContext('2d', { willReadFrequently: true });
+      const poser = (image) => {
+        toile.width = image.width;
+        toile.height = image.height;
+        ctx.putImageData(image, 0, 0);
+      };
+      // Pour la photo, on garde ce qu'on a : rogner, mais ni taille minimale
+      // ni tri — c'est le calque du flyer qui a déjà été jugé.
+      const libre = { ...reglages, min: 0, contenu: 'tout', rogner: true };
+      let res = null;
+
+      const fusion = await imbrique.decoderFusion();
+      if (!uniforme(fusion.data)) {
+        poser(fusion);
+        res = await finaliser(toile, libre);
+      } else {
+        // Sans « compatibilité maximale », Photoshop laisse l'image complète
+        // blanche. La photo est alors l'un des calques : le plus haut qui
+        // ressemble à une photo — ou, mieux encore, son propre original.
+        for (const k of [...imbrique.calques].reverse()) {
+          if (k.genre !== 'pixels' || k.cache || !k.largeur || !k.hauteur) continue;
+          poser(await imbrique.decoder(k));
+          const essai = await finaliser(toile, { ...libre, contenu: 'photos' });
+          if (essai.ecartee) continue;
+          res = (await versionOriginale(imbrique.original(k), essai, reglages, profondeur + 1)) || essai;
+          break;
+        }
+      }
+      toile.width = toile.height = 0;
+      if (!res || res.ecartee) return null;
+      return res.largeur * res.hauteur > calque.largeur * calque.hauteur ? res : null;
+    }
+
+    const bitmap = await createImageBitmap(new Blob([original.octets], { type: original.type }));
+    const { width, height } = bitmap;
+    bitmap.close();
+    if (width * height <= calque.largeur * calque.hauteur) return null;
+    return { blob: new Blob([original.octets], { type: original.type }),
+             largeur: width, hauteur: height, ext: original.ext, intacte: true };
+  } catch (e) {
+    jrn.ecrire(`original « ${original.nom} » illisible — on garde le calque (${e.message})`);
+    return null;
+  }
+}
+
+/** Une image d'une seule couleur, sans rien dessus (sondée, pas lue en entier). */
+function uniforme(d) {
+  for (let i = 0; i < d.length; i += 4 * 211) {
+    for (let k = 0; k < 4; k++) if (Math.abs(d[i + k] - d[k]) > 6) return false;
+  }
+  return true;
 }
 
 /** Un pixel sur mille et quelques suffit pour reconnaître deux images identiques. */

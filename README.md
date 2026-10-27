@@ -18,7 +18,7 @@ filigrane sur le résultat.
 |---|---|
 | **Chemise** | Assemble photos, scans et PDF en un seul dossier PDF. Cartes d'identité à taille réelle, planches contact, recto/verso, numérotation, traits de coupe. |
 | **Presse** | Allège un PDF trop lourd. Trois niveaux de compression, conversion en niveaux de gris, livraison en PDF ou en JPG (archive ZIP pour plusieurs pages) avec le nom de votre choix. |
-| **Tamis** | Extrait les photos de PDF et de fichiers Photoshop (PSD), à leur taille réelle. Bords vides retirés ; formes, ombres et textes colorés écartés. Depuis un PSD, chaque calque photo sort seul et détouré. Les JPEG intacts sont recopiés octet pour octet. Une archive ZIP avec un dossier par document. |
+| **Tamis** | Sort la page entière d'un PDF (300 dpi) ou d'un fichier Photoshop (recto et verso séparés, d'après les plans de travail). En option, les morceaux : photos et logos un par un, bords vides retirés, formes et textes écartés. Depuis un PSD, chaque logo ou photo placé sort en pleine résolution, depuis le fichier d'origine que Photoshop garde dans le document. Une archive ZIP avec un dossier par document. |
 | **Poinçon** | QR codes présentables : Wi-Fi, contact vCard, lien, e-mail, SMS. Logo au centre, dégradés, formes de modules, export PNG haute définition et SVG. |
 | **Sillon** | Extrait la piste audio d'une vidéo. Copie directe sans réencoder quand c'est possible : qualité identique, résultat quasi instantané. |
 | **Alambic** | Convertit audio, vidéo et images. Les vocaux WhatsApp en MP3, une vidéo en MP4 lisible partout, un JPEG en PNG. Traitement en lot. |
@@ -109,7 +109,7 @@ atelier/
   outils.js              Le catalogue (source de vérité de l'accueil)
   ui.js                  Zone de dépôt, messages, formats, téléchargement
   moteur.js              ffmpeg.wasm partagé — chargement, exécution, analyse
-  psd.js                 Lecture des calques Photoshop, sans bibliothèque (Tamis)
+  psd.js                 Lecture des fichiers Photoshop, sans bibliothèque (Tamis)
   vendor/                7 Ko de code tiers qui doit être servi en local
 outils/
   chemise/  presse/  tamis/  poincon/  sillon/  alambic/  gomme/

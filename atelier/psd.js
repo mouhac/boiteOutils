@@ -59,7 +59,7 @@ export function ouvrirPsd(tampon) {
   if (version !== 1 && version !== 2) throw new Error('Version de Photoshop inconnue.');
   const psb = version === 2;
   L.sauter(6);
-  L.u16();                                   // nombre de canaux de l'image fusionnée
+  const canauxImage = L.u16();               // canaux de l'image fusionnée
   const hauteur = L.u32();
   const largeur = L.u32();
   const profondeur = L.u16();
@@ -78,13 +78,41 @@ export function ouvrirPsd(tampon) {
 
   /* ---- Calques ----------------------------------------------------- */
   const longueur = () => (psb ? L.u64() : L.u32());
-  const finSection = longueur();
+  const tailleSection = longueur();
+  const finSection = L.p + tailleSection;    // l'image fusionnée commence ici
   const calques = [];
-  if (!finSection) return { largeur, hauteur, mode, profondeur, calques };
+  const originaux = new Map();               // identifiant → fichier embarqué
+  let transparenceFusion = false;
 
+  const resultat = () => ({
+    /**
+     * Le fichier d'origine d'un objet dynamique (PNG, JPEG…), tel qu'il a
+     * été placé dans Photoshop — ou null s'il n'y en a pas.
+     */
+    original: (calque) => (calque.lien && originaux.get(calque.lien)) || null,
+    largeur, hauteur, mode, profondeur, calques,
+    /** Pixels RVBA d'un calque, masque de fusion appliqué. */
+    decoder: (calque) => decoderCalque(L.o, calque, { modeCode, profondeur, psb }),
+    /**
+     * L'image complète, telle que Photoshop l'affiche. Il l'enregistre à
+     * côté des calques (option « compatibilité maximale », active par défaut).
+     */
+    decoderFusion: () => decoderFusion(L.o, finSection,
+      { largeur, hauteur, canaux: canauxImage, modeCode, profondeur, psb, transparence: transparenceFusion }),
+    /** Les plans de travail (recto, verso…), s'il y en a. */
+    planches: calques.filter((c) => c.planche)
+      .map((c) => ({ nom: c.nom, ...c.planche }))
+      // Dans l'ordre de lecture : de gauche à droite, puis de haut en bas.
+      .sort((a, b) => a.haut - b.haut || a.gauche - b.gauche),
+  });
+
+  if (!tailleSection) return resultat();
   const finInfos = longueur() + L.p;
-  if (finInfos <= L.p) return { largeur, hauteur, mode, profondeur, calques };
-  const nombre = Math.abs(L.i16());
+  if (finInfos <= L.p) return resultat();
+  const nombreBrut = L.i16();
+  // Négatif : le premier canal en plus de l'image fusionnée est sa transparence.
+  transparenceFusion = nombreBrut < 0;
+  const nombre = Math.abs(nombreBrut);
 
   for (let i = 0; i < nombre; i++) {
     const c = { haut: L.i32(), gauche: L.i32() };
@@ -136,7 +164,13 @@ export function ouvrirPsd(tampon) {
       } else if (CLES_TEXTE.has(cle)) c.genre = 'texte';
       else if (CLES_REMPLISSAGE.has(cle)) c.genre = 'remplissage';
       else if (CLES_REGLAGE.has(cle)) c.genre = 'reglage';
-      else if (CLES_OBJET.has(cle)) c.objet = true;
+      else if (CLES_OBJET.has(cle)) {
+        c.objet = true;
+        c.lien = c.lien || identifiantObjet(L.o, cle, debut, debut + taille);
+      }
+      else if (cle === 'artb' || cle === 'artd' || cle === 'abdd') {
+        c.planche = cadrePlanche(L.o, debut, debut + taille) || c.planche;
+      }
 
       L.p = debut + taille;
     }
@@ -157,6 +191,24 @@ export function ouvrirPsd(tampon) {
     }
   }
 
+  /* Après les calques : les fichiers d'origine des objets dynamiques.
+     Une image placée dans Photoshop y est gardée entière, à sa pleine
+     résolution, même si le flyer ne la montre qu'en vignette. */
+  L.p = finInfos;
+  if (L.p + 4 <= finSection) L.sauter(L.u32());   // masque global
+  while (L.p + 12 <= finSection) {
+    // Les blocs sont alignés sur 4 octets ; on rattrape le bourrage éventuel.
+    let k = 0;
+    while (k < 4 && !['8BIM', '8B64'].includes(String.fromCharCode(...L.o.subarray(L.p, L.p + 4)))) { L.p++; k++; }
+    if (k === 4) break;
+    L.sig();
+    const cle = L.sig();
+    const taille = psb && CLES_LONGUES.has(cle) ? L.u64() : L.u32();
+    const debut = L.p;
+    if (cle === 'lnk2' || cle === 'lnk3' || cle === 'lnkD') lireOriginaux(L.o, debut, debut + taille, originaux);
+    L.p = debut + taille;
+  }
+
   /* Les noms de groupe donnent du contexte : on les rattache à chaque calque.
      Le fichier va du bas vers le haut ; en le lisant à l'envers, l'ouverture
      d'un groupe (qui porte son nom) précède son contenu. */
@@ -168,11 +220,193 @@ export function ouvrirPsd(tampon) {
     else c.dossier = chemin.join(' / ');
   }
 
-  return {
-    largeur, hauteur, mode, profondeur, calques,
-    /** Pixels RVBA d'un calque, masque de fusion appliqué. */
-    decoder: (calque) => decoderCalque(L.o, calque, { modeCode, profondeur, psb }),
+  return resultat();
+}
+
+/**
+ * Le cadre d'un plan de travail est rangé dans un « descripteur » Photoshop,
+ * un format riche qu'on ne décode pas en entier : on y cherche seulement les
+ * quatre côtés de « artboardRect », écrits « Top  doub <nombre> », etc.
+ */
+function cadrePlanche(octets, debut, fin) {
+  const v = new DataView(octets.buffer, octets.byteOffset);
+  const lire = (cle) => {
+    const motif = [...cle, ...'doub'].map((ch) => ch.charCodeAt(0));
+    for (let p = debut; p + 16 <= fin; p++) {
+      let ok = true;
+      for (let k = 0; k < 8 && ok; k++) ok = octets[p + k] === motif[k];
+      if (ok) return v.getFloat64(p + 8);
+    }
+    return null;
   };
+  const [haut, gauche, bas, droite] = ['Top ', 'Left', 'Btom', 'Rght'].map(lire);
+  if ([haut, gauche, bas, droite].some((n) => n == null) || droite <= gauche || bas <= haut) return null;
+  return { haut: Math.round(haut), gauche: Math.round(gauche),
+           bas: Math.round(bas), droite: Math.round(droite) };
+}
+
+/* ------------------------------------------------------------------ */
+/* Objets dynamiques : retrouver le fichier d'origine                  */
+/* ------------------------------------------------------------------ */
+const u32 = (o, p) => ((o[p] << 24) >>> 0) + (o[p + 1] << 16) + (o[p + 2] << 8) + o[p + 3];
+const u64 = (o, p) => u32(o, p) * 2 ** 32 + u32(o, p + 4);
+const egal = (o, p, motif) => motif.every((b, k) => o[p + k] === b);
+const octetsDe = (s) => [...s].map((ch) => ch.charCodeAt(0));
+
+/**
+ * L'identifiant qui relie un calque à son fichier d'origine. « SoLd » le
+ * range sous la clé « Idnt » de son descripteur ; « PlLd » le donne en clair,
+ * juste après son en-tête.
+ */
+function identifiantObjet(o, cle, debut, fin) {
+  if (cle === 'SoLd' || cle === 'SoLE') {
+    const motif = octetsDe('IdntTEXT');
+    for (let p = debut; p + 12 <= fin; p++) {
+      if (!egal(o, p, motif)) continue;
+      const n = u32(o, p + 8);
+      let s = '';
+      for (let k = 0; k < n; k++) s += String.fromCharCode((o[p + 12 + 2 * k] << 8) | o[p + 13 + 2 * k]);
+      return s.replace(/\0+$/, '');
+    }
+  } else if (cle === 'PlLd') {
+    const n = o[debut + 8];                   // après « plcL » et la version
+    return String.fromCharCode(...o.subarray(debut + 9, debut + 9 + n));
+  }
+  return null;
+}
+
+/* Les formats d'image qu'un navigateur sait afficher, reconnus à leurs
+   premiers octets. */
+const SIGNATURES = [
+  { type: 'image/png', ext: 'png', motif: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A] },
+  { type: 'image/jpeg', ext: 'jpg', motif: [0xFF, 0xD8, 0xFF] },
+  { type: 'image/gif', ext: 'gif', motif: octetsDe('GIF8') },
+  { type: 'image/webp', ext: 'webp', motif: octetsDe('RIFF') },
+  { type: 'image/svg+xml', ext: 'svg', motif: octetsDe('<?xml') },
+  { type: 'image/svg+xml', ext: 'svg', motif: octetsDe('<svg') },
+  // Une photo placée comme « objet dynamique » est souvent elle-même un
+  // document Photoshop : on le rouvrira avec ce même lecteur.
+  { type: 'image/vnd.adobe.photoshop', ext: 'psd', motif: octetsDe('8BPS') },
+];
+
+/**
+ * Le bloc « lnk2 » enchaîne les fichiers embarqués. Chacun a un en-tête
+ * (identifiant, nom, taille), parfois suivi d'un descripteur qu'on ne décode
+ * pas : on repère le début du fichier à sa signature, puis on prend
+ * exactement le nombre d'octets annoncé.
+ */
+function lireOriginaux(o, debut, fin, originaux) {
+  let p = debut;
+  while (p + 8 <= fin) {
+    const longueur = u64(o, p);
+    const finEntree = p + 8 + longueur;
+    if (!longueur || finEntree > fin) break;
+    try {
+      let q = p + 8;
+      const genre = String.fromCharCode(...o.subarray(q, q + 4));
+      q += 8;                                 // genre, version
+      const lgId = o[q];
+      const id = String.fromCharCode(...o.subarray(q + 1, q + 1 + lgId));
+      q += 1 + lgId;
+      const lgNom = u32(o, q);
+      let nom = '';
+      for (let k = 0; k < lgNom; k++) nom += String.fromCharCode((o[q + 4 + 2 * k] << 8) | o[q + 5 + 2 * k]);
+      q += 4 + 2 * lgNom + 8;                 // nom, type et créateur de fichier
+      const taille = u64(o, q);
+      q += 8;
+
+      if (genre === 'liFD' && taille > 0) {
+        for (let s = q; s < finEntree - taille + 1; s++) {
+          const sig = SIGNATURES.find((g) => egal(o, s, g.motif));
+          if (!sig) continue;
+          originaux.set(id, { nom: nom.replace(/\0+$/, ''), type: sig.type, ext: sig.ext,
+                              octets: o.subarray(s, s + taille) });
+          break;
+        }
+      }
+    } catch { /* entrée illisible : on passe à la suivante */ }
+    p = finEntree + ((4 - (longueur % 4)) % 4);   // entrées alignées sur 4 octets
+  }
+}
+
+/** L'image fusionnée : tous ses canaux à la suite, d'un seul bloc. */
+async function decoderFusion(octets, debut, { largeur: l, hauteur: h, canaux, modeCode, profondeur, psb, transparence }) {
+  const compression = (octets[debut] << 8) | octets[debut + 1];
+  const couleurs = modeCode === 4 ? 4 : modeCode === 3 ? 3 : 1;
+  const avecAlpha = transparence && canaux > couleurs;
+  const utiles = couleurs + (avecAlpha ? 1 : 0);
+  const parLigne = l * (profondeur / 8);
+  const plan = parLigne * h;
+  let brut;
+
+  if (compression === 0) {
+    brut = octets.subarray(debut + 2, debut + 2 + plan * utiles);
+  } else if (compression === 1) {
+    // Une table de longueurs pour toutes les lignes de tous les canaux,
+    // puis les données PackBits, canal après canal.
+    brut = new Uint8Array(plan * utiles);
+    depaqueter(octets, debut + 2 + canaux * h * (psb ? 4 : 2), octets.length, brut);
+  } else {
+    throw new Error('Image fusionnée compressée d’une façon non prise en charge.');
+  }
+
+  const canal = (k) => {
+    const morceau = brut.subarray(k * plan, (k + 1) * plan);
+    if (profondeur === 8) return morceau;
+    const s = new Uint8Array(l * h);
+    for (let i = 0; i < s.length; i++) s[i] = morceau[i * 2];
+    return s;
+  };
+
+  const image = new ImageData(l, h);
+  const d = image.data;
+  const A = avecAlpha ? canal(couleurs) : null;
+  if (modeCode === 4) {
+    const [C, M, J, N] = [0, 1, 2, 3].map(canal);
+    for (let i = 0, j = 0; j < l * h; i += 4, j++) {
+      d[i] = (C[j] * N[j]) / 255;
+      d[i + 1] = (M[j] * N[j]) / 255;
+      d[i + 2] = (J[j] * N[j]) / 255;
+      d[i + 3] = A ? A[j] : 255;
+    }
+  } else if (modeCode === 3) {
+    const [R, V, B] = [0, 1, 2].map(canal);
+    for (let i = 0, j = 0; j < l * h; i += 4, j++) {
+      d[i] = R[j]; d[i + 1] = V[j]; d[i + 2] = B[j]; d[i + 3] = A ? A[j] : 255;
+    }
+  } else {
+    const G = canal(0);
+    for (let i = 0, j = 0; j < l * h; i += 4, j++) {
+      d[i] = d[i + 1] = d[i + 2] = G[j]; d[i + 3] = A ? A[j] : 255;
+    }
+  }
+  // Photoshop enregistre une image transparente « prémultipliée » sur du
+  // blanc : on retire ce blanc pour que les bords détourés restent propres.
+  if (A) {
+    for (let i = 0; i < d.length; i += 4) {
+      const a = d[i + 3];
+      if (a === 0 || a === 255) continue;
+      for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, (d[i + k] - 255 + a) * 255 / a));
+    }
+  }
+  return image;
+}
+
+/** PackBits : un octet de contrôle, puis une série littérale ou répétée. */
+function depaqueter(octets, p, fin, sortie) {
+  let q = 0;
+  while (q < sortie.length && p < fin) {
+    const n = octets[p++];
+    if (n < 128) {
+      const k = n + 1;
+      sortie.set(octets.subarray(p, p + k), q);
+      p += k; q += k;
+    } else if (n > 128) {
+      const k = 257 - n;
+      sortie.fill(octets[p++], q, q + k);
+      q += k;
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -249,21 +483,8 @@ async function lireCanal(octets, canal, l, h, profondeur, psb) {
   } else if (compression === 1) {
     brut = new Uint8Array(parLigne * h);
     const tailleCompte = psb ? 4 : 2;
-    let p = debut + 2 + h * tailleCompte;    // on saute la table des longueurs
-    let q = 0;
-    // PackBits : un octet de contrôle, puis une série littérale ou répétée.
-    while (q < brut.length && p < fin) {
-      const n = octets[p++];
-      if (n < 128) {
-        const k = n + 1;
-        brut.set(octets.subarray(p, p + k), q);
-        p += k; q += k;
-      } else if (n > 128) {
-        const k = 257 - n;
-        brut.fill(octets[p++], q, q + k);
-        q += k;
-      }
-    }
+    // On saute la table des longueurs de ligne.
+    depaqueter(octets, debut + 2 + h * tailleCompte, fin, brut);
   } else if (compression === 2 || compression === 3) {
     const flux = new Blob([octets.subarray(debut + 2, fin)]).stream()
       .pipeThrough(new DecompressionStream('deflate'));
