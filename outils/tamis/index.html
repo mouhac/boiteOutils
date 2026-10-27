@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tamis — extraire les photos de PDF</title>
-<meta name="description" content="Récupérer les photos et images contenues dans un ou plusieurs PDF, à leur qualité d'origine. Archive ZIP rangée par document. Tout se passe dans le navigateur.">
+<title>Tamis — extraire les photos</title>
+<meta name="description" content="Récupérer les photos contenues dans des PDF et des fichiers Photoshop (PSD), à leur qualité d'origine, détourées quand elles l'étaient. Archive ZIP rangée par document. Tout se passe dans le navigateur.">
 <meta name="theme-color" content="#FFFFFF">
 <link rel="stylesheet" href="../../atelier/atelier.css">
 <style>
@@ -23,7 +23,8 @@
   .note-methode p{margin:0 0 7px}
   .note-methode p:last-child{margin:0}
 
-  #apercu{margin-top:26px}
+  #apercu{margin-top:26px;scroll-margin-top:84px}
+  #teteLot{scroll-margin-top:84px}
   .piece{cursor:pointer}
   .piece .vue{height:140px}
   .piece .kind b{color:var(--repere);font-weight:600}
@@ -44,7 +45,7 @@
     </svg>
     <div>
       <h1>Tamis</h1>
-      <p>Extraire les photos de vos PDF</p>
+      <p>Extraire les photos de vos PDF et PSD</p>
     </div>
   </a>
   <a class="retour" href="../../">&#8592; L&rsquo;Atelier</a>
@@ -61,6 +62,17 @@
       <summary>Tri</summary>
       <div class="grp-body">
         <div class="field">
+          <label>Ce qu'on garde</label>
+          <div class="seg col" id="segContenu">
+            <button data-v="photos" class="on">Les photos seulement</button>
+            <button data-v="logos">Photos, logos et illustrations</button>
+            <button data-v="tout">Tout, même les formes et les textes</button>
+          </div>
+          <p class="hint">Une photo a des milliers de nuances. Une forme, un
+            texte coloré, une ombre n'en ont qu'une ou deux : ils sont écartés.</p>
+        </div>
+
+        <div class="field">
           <label for="fMin">Taille minimale</label>
           <select id="fMin">
             <option value="0">Tout garder, même les icônes</option>
@@ -68,11 +80,12 @@
             <option value="120" selected>120 px — écarter les logos et icônes</option>
             <option value="300">300 px — les vraies photos seulement</option>
           </select>
-          <p class="hint">Une image plus petite que ça, en largeur ou en
-            hauteur, est laissée de côté.</p>
+          <p class="hint">Mesurée une fois les bords vides retirés : une barre
+            perdue au milieu d'une page blanche ne compte pas pour une page.</p>
         </div>
 
         <div class="checks">
+          <label class="chk"><input type="checkbox" id="optRogner" checked><span>Retirer les bords vides (fond blanc ou transparent autour de l'image)</span></label>
           <label class="chk"><input type="checkbox" id="optDoublons" checked><span>Ne garder qu'un exemplaire des images répétées (un logo sur chaque page, par exemple)</span></label>
         </div>
       </div>
@@ -107,11 +120,14 @@
   <main class="mat">
 
     <div class="note-methode">
-      <p><b>Comment ça marche.</b> Le Tamis ouvre chaque PDF et récupère les
-        images telles qu'elles y ont été rangées, à leur taille réelle — ce n'est
-        pas une capture d'écran de la page.</p>
-      <p>Un <b>scan</b> donne une image par page : c'est normal, la page entière
-        est une photo. Un PDF fait sur ordinateur, sans image, n'a rien à donner.</p>
+      <p><b>Comment ça marche.</b> Le Tamis récupère les images telles qu'elles
+        ont été rangées dans le fichier, à leur taille réelle — ce n'est pas une
+        capture d'écran de la page. Les bords vides sont retirés, les formes et
+        les textes colorés écartés.</p>
+      <p><b>Vous avez le fichier Photoshop (.psd) ? Déposez-le plutôt que le
+        PDF.</b> Chaque calque y est intact : la photo sort seule, détourée. Un PDF
+        enregistré depuis Photoshop a souvent fusionné la photo avec le fond — elle
+        n'y existe plus séparément.</p>
     </div>
 
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Ajouter des PDF">
@@ -119,10 +135,10 @@
         <path d="M6 2h8l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
         <path d="M14 2v5h5"/><circle cx="10" cy="12" r="1.6"/><path d="m6 19 4-4 3 2 2-2 3 3"/>
       </svg>
-      <h2 class="drop-t">Déposez vos PDF</h2>
+      <h2 class="drop-t">Déposez vos PDF ou PSD</h2>
       <p class="drop-s">
-        Catalogues, rapports, scans, albums. Autant de fichiers que vous
-        voulez — chacun aura son dossier dans l'archive.
+        Catalogues, affiches, flyers, maquettes Photoshop. Autant de fichiers
+        que vous voulez — chacun aura son dossier dans l'archive.
       </p>
       <span class="fauxbtn">Choisir des fichiers</span>
       <p class="drop-f">Rien n'est envoyé sur internet</p>
@@ -143,6 +159,11 @@
       <div class="section-head">
         <h2 id="titreApercu">Images</h2>
         <span class="count" id="compteApercu">0</span>
+        <div class="tools">
+          <button class="btn btn-mini" id="btnDlApercu">Télécharger</button>
+          <button class="btn btn-mini" id="btnRetourListe">&#8593; Retour à la liste</button>
+          <button class="btn btn-mini" id="btnFermerApercu">Fermer</button>
+        </div>
       </div>
       <ul class="grid" id="grille"></ul>
     </section>
@@ -162,6 +183,7 @@
 import { $, dire, bravo, rater, poids, sansExtension, telecharger, zoneDepot,
          segment, journal, verrouFermeture, nomPropre } from '../../atelier/ui.js';
 import { creerZip } from '../../atelier/zip.js';
+import { ouvrirPsd } from '../../atelier/psd.js';
 
 /* ------------------------------------------------------------------ */
 /* Bibliothèques                                                       */
@@ -174,10 +196,19 @@ const pretes = () => !!(window.PDFLib && window.pdfjsLib);
 
 const jrn = journal($('#journal'));
 const segFormat = segment($('#segFormat'));
+const segContenu = segment($('#segContenu'));
 $('#btnVider').addEventListener('click', () => jrn.vider());
 
 const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
 const deux = (n) => String(n).padStart(2, '0');
+
+/* Rend la main à l'affichage entre deux images. Pas avec setTimeout : dans
+   un onglet en arrière-plan, le navigateur le retarde d'une seconde ou plus,
+   et cinquante calques prendraient une minute de pause pure. */
+const canalRepit = new MessageChannel();
+const enAttente = [];
+canalRepit.port1.onmessage = () => enAttente.shift()?.();
+const respirer = () => new Promise((r) => { enAttente.push(r); canalRepit.port2.postMessage(0); });
 
 /* ------------------------------------------------------------------ */
 /* État                                                                */
@@ -187,12 +218,14 @@ let compteur = 0;
 let enCours = false;
 let affiche = null;          // document dont les images sont à l'écran
 
-zoneDepot($('#drop'), ajouter, { accepte: 'application/pdf,.pdf' });
+zoneDepot($('#drop'), ajouter, { accepte: 'application/pdf,.pdf,.psd,.psb' });
+
+const estPsd = (f) => /\.ps[db]$/i.test(f.name);
 
 function ajouter(fichiers) {
   for (const f of fichiers) {
-    if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') {
-      rater(`« ${f.name} » n'est pas un PDF — ignoré.`);
+    if (!estPsd(f) && !/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') {
+      rater(`« ${f.name} » n'est ni un PDF ni un PSD — ignoré.`);
       continue;
     }
     lot.push({ id: ++compteur, fichier: f, etat: 'attente', part: 0,
@@ -242,12 +275,13 @@ function rafraichir() {
 
     let sous;
     if (p.etat === 'fini') {
-      sous = `${pluriel(p.nbPages, 'page')} · ` +
+      sous = (p.psd ? `${pluriel(p.nbCalques, 'calque')} · ` : `${pluriel(p.nbPages, 'page')} · `) +
              (p.images.length
                ? `${pluriel(p.images.length, 'image')} · ${poids(poidsImages(p))}`
                : 'aucune image') +
              (p.ecartees ? ` · ${p.ecartees} écartée${p.ecartees > 1 ? 's' : ''}` : '') +
-             (p.secours ? ' · mode de secours' : '');
+             (p.secours ? ' · mode de secours' : '') +
+             (p.calques ? ' · PDF Photoshop : déposez le .psd pour avoir les photos seules' : '');
     } else {
       sous = p.message || poids(p.fichier.size);
     }
@@ -265,7 +299,7 @@ function rafraichir() {
         </span>
         <span class="etat ${p.etat === 'fini' && !vide ? 'ok' : p.etat === 'rate' ? 'err' : ''}">${etat}</span>
         <span class="acts">
-          ${p.images.length ? `<button class="btn btn-mini" data-a="voir">Voir</button>
+          ${p.images.length ? `<button class="btn btn-mini" data-a="voir">${affiche === p ? 'Masquer' : 'Voir'}</button>
           <button class="btn btn-mini" data-a="dl">Télécharger</button>` : ''}
           <button data-a="del" class="del" title="Retirer" aria-label="Retirer">&#10005;</button>
         </span>
@@ -280,7 +314,9 @@ $('#lot').addEventListener('click', (e) => {
   const p = lot.find((x) => x.id === +b.closest('.rang-item').dataset.id);
   if (!p) return;
 
-  if (b.dataset.a === 'voir') montrer(p);
+  // Les images s'affichent sous la liste : avec beaucoup de documents, elles
+  // tomberaient hors de l'écran sans qu'on s'en aperçoive. On y descend.
+  if (b.dataset.a === 'voir') montrer(affiche === p ? null : p, true);
   else if (b.dataset.a === 'dl') livrerDocument(p);
   else if (b.dataset.a === 'del') {
     if (enCours && p.etat === 'travail') { dire('Ce document est en cours de traitement.'); return; }
@@ -291,7 +327,7 @@ $('#lot').addEventListener('click', (e) => {
   }
 });
 
-function montrer(piece) {
+function montrer(piece, defiler = false) {
   affiche = piece && piece.images.length ? piece : null;
   $('#apercu').hidden = !affiche;
   if (!affiche) { $('#grille').innerHTML = ''; rafraichir(); return; }
@@ -307,7 +343,13 @@ function montrer(piece) {
       </div>
     </li>`).join('');
   rafraichir();
+  if (defiler) $('#apercu').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+$('#btnDlApercu').addEventListener('click', () => { if (affiche) livrerDocument(affiche); });
+$('#btnFermerApercu').addEventListener('click', () => montrer(null));
+$('#btnRetourListe').addEventListener('click', () =>
+  $('#teteLot').scrollIntoView({ behavior: 'smooth', block: 'start' }));
 
 $('#grille').addEventListener('click', (e) => {
   const li = e.target.closest('.piece');
@@ -330,8 +372,10 @@ async function lancer() {
     rater("Les bibliothèques PDF n'ont pas pu être chargées. Rechargez la page.");
     return;
   }
-  const aFaire = lot.filter((p) => p.etat !== 'fini');
-  if (!aFaire.length) { dire('Tout est déjà extrait.'); return; }
+  // Un document déjà passé au tamis avec d'autres réglages est refait :
+  // changer la taille minimale ou le format doit avoir un effet.
+  const aRefaire = (p) => p.etat !== 'fini' || p.signature !== signature();
+  if (!lot.some(aRefaire)) { dire('Tout est déjà extrait avec ces réglages.'); return; }
 
   enCours = true;
   verrouFermeture(true);
@@ -340,16 +384,22 @@ async function lancer() {
 
   let trouvees = 0;
   let reussis = 0;
-  for (const piece of aFaire) {
+  const faits = new Set();
+  // On reprend la liste à chaque tour : des PDF déposés pendant l'extraction
+  // sont traités dans la foulée au lieu d'attendre un second clic.
+  for (let piece; (piece = lot.find((p) => !faits.has(p) && aRefaire(p)));) {
+    faits.add(piece);
     try {
       await extraire(piece);
       trouvees += piece.images.length;
       reussis++;
-      if (piece.images.length && (!affiche || affiche.etat !== 'fini')) montrer(piece);
+      if (piece.images.length && (!affiche || !lot.includes(affiche))) montrer(piece);
+      else if (affiche === piece) montrer(piece);
     } catch (e) {
       piece.etat = 'rate';
       piece.message = e.message;
       jrn.ecrire(`[${piece.fichier.name}] ÉCHEC — ${e.message}`);
+      if (affiche === piece) montrer(null);
     }
     rafraichir();
   }
@@ -369,7 +419,9 @@ async function extraire(piece) {
   piece.part = 0;
   piece.message = '';
   piece.ecartees = 0;
+  piece.raisons = {};
   piece.secours = false;
+  piece.calques = false;
   liberer(piece);
   rafraichir();
 
@@ -382,84 +434,439 @@ async function extraire(piece) {
     }
   };
 
-  const octets = new Uint8Array(await piece.fichier.arrayBuffer());
-  const reglages = {
-    min: +$('#fMin').value,
-    doublons: $('#optDoublons').checked,
-    format: segFormat.valeur,
-  };
+  const tampon = await piece.fichier.arrayBuffer();
+  const reglages = lireReglages();
+  piece.signature = signature();
 
-  let src;
-  try {
-    src = await window.PDFLib.PDFDocument.load(octets, { updateMetadata: false });
-  } catch (e) {
-    if (!/encrypt/i.test(e.message || e.name)) throw new Error('PDF illisible ou abîmé.');
-    // Un PDF protégé se lit, mais ses flux sont chiffrés : seul pdf.js sait
-    // les déchiffrer. On passe par lui, au prix de l'intégrité des JPEG.
-    jrn.ecrire(`[${piece.fichier.name}] PDF protégé — mode de secours`);
-    piece.secours = true;
-    await extraireSecours(piece, octets, reglages, avancer);
+  if (estPsd(piece.fichier)) {
+    piece.psd = true;
+    await extrairePsd(piece, tampon, reglages, avancer);
     terminer(piece);
     return;
   }
 
+  const octets = new Uint8Array(tampon);
+  try {
+    await extraireDirect(piece, octets, reglages, avancer);
+  } catch (e) {
+    // Un PDF protégé a ses flux chiffrés, un PDF un peu abîmé déroute
+    // pdf-lib : pdf.js, plus tolérant, sait lire les deux. On passe par lui,
+    // au prix de la copie octet pour octet des JPEG.
+    const protege = /encrypt/i.test(e.message || e.name);
+    jrn.ecrire(`[${piece.fichier.name}] ${protege ? 'PDF protégé' : 'lecture directe impossible (' + e.message + ')'} — mode de secours`);
+    liberer(piece);
+    piece.ecartees = 0;
+    piece.raisons = {};
+    piece.secours = true;
+    try {
+      // pdf.js s'approprie le tampon qu'on lui donne : on lui passe une copie.
+      await extraireSecours(piece, octets.slice(), reglages, avancer);
+    } catch {
+      throw new Error(protege
+        ? 'PDF protégé par un mot de passe à l’ouverture.'
+        : 'PDF illisible ou abîmé.');
+    }
+  }
+  terminer(piece);
+}
+
+function lireReglages() {
+  return {
+    min: +$('#fMin').value,
+    contenu: segContenu.valeur,
+    rogner: $('#optRogner').checked,
+    doublons: $('#optDoublons').checked,
+    format: segFormat.valeur,
+  };
+}
+const signature = () => JSON.stringify(lireReglages());
+
+/** Une image écartée, et pourquoi : le journal en fait le compte. */
+function ecarter(piece, raison) {
+  piece.ecartees++;
+  piece.raisons[raison] = (piece.raisons[raison] || 0) + 1;
+}
+
+const RAISONS = {
+  petite: 'trop petite', forme: 'forme ou ombre', logo: 'logo ou texte',
+  vide: 'vide', masque: 'masque', texte: 'calque de texte',
+  remplissage: 'aplat de couleur', reglage: 'calque de réglage',
+};
+
+function terminer(piece) {
+  piece.etat = 'fini';
+  piece.part = 1;
+  const detail = Object.entries(piece.raisons)
+    .map(([r, n]) => `${n} ${RAISONS[r] || r}`).join(', ');
+  jrn.ecrire(`[${piece.fichier.name}] ${pluriel(piece.images.length, 'image')} · ` +
+             `${poids(poidsImages(piece))}` + (detail ? ` · écartées : ${detail}` : ''));
+}
+
+/* Ce que l'onglet peut décoder pour une image donnée ; on évite les toiles
+   géantes que le navigateur rendrait vides. */
+const COTE_MAX = 16000;
+const SURFACE_MAX = 60e6;
+
+/* ------------------------------------------------------------------ */
+/* PDF : le chemin normal                                              */
+/* ------------------------------------------------------------------ */
+/** pdf-lib inventorie les images ; les JPEG peuvent sortir intacts. */
+async function extraireDirect(piece, octets, reglages, avancer) {
+  const src = await window.PDFLib.PDFDocument.load(octets, { updateMetadata: false });
   const trouvees = inventaire(src);
   piece.nbPages = src.getPageCount();
   jrn.ecrire(`[${piece.fichier.name}] ${pluriel(piece.nbPages, 'page')} · ` +
              `${pluriel(trouvees.length, 'image')} référencée${trouvees.length > 1 ? 's' : ''}`);
 
-  /* ---- Tri : taille, masques, doublons ---------------------------- */
+  /* Photoshop enregistre chaque calque comme une image pleine page, montrée
+     à travers un tracé de découpe. On le reconnaît à une série d'images de
+     même taille, aux proportions de la page. */
+  const pages = src.getPages();
+  const parTaille = new Map();
+  for (const im of trouvees) {
+    const { width, height } = pages[im.page - 1].getSize();
+    if (Math.abs(im.largeur / im.hauteur - width / height) > 0.01) continue;
+    const cle = `${im.page}:${im.largeur}x${im.hauteur}`;
+    parTaille.set(cle, (parTaille.get(cle) || 0) + 1);
+  }
+  if ([...parTaille.values()].some((n) => n >= 5)) {
+    piece.calques = true;
+    jrn.ecrire(`[${piece.fichier.name}] PDF Photoshop à calques : chaque calque est une ` +
+               `image pleine page. Les photos y sont fusionnées avec le fond — le .psd ` +
+               `d'origine donnera de bien meilleurs résultats.`);
+  }
+
+  /* ---- Premier tri, sans décoder : masques, tailles, doublons ------ */
   const vues = new Set();
   const gardees = [];
   for (const im of trouvees) {
-    if (im.masque || im.largeur < reglages.min || im.hauteur < reglages.min) {
-      piece.ecartees++;
-      continue;
-    }
+    if (im.masque) { ecarter(piece, 'masque'); continue; }
+    if (im.largeur < reglages.min || im.hauteur < reglages.min) { ecarter(piece, 'petite'); continue; }
     if (reglages.doublons) {
       const empreinte = `${im.largeur}x${im.hauteur}:${hacher(im.flux.contents)}`;
       if (vues.has(empreinte)) continue;
       vues.add(empreinte);
     }
+    im.intacte = reglages.format !== 'png' && jpegIntact(im.flux);
     gardees.push(im);
   }
 
-  /* ---- JPEG recopiés tels quels, le reste redessiné par pdf.js ---- */
-  const aDessiner = [];
+  /* ---- Puis chaque image est décodée, rognée, jugée, encodée ------- */
+  /* Sans rognage ni tri, inutile de décoder les JPEG : ils sortent tels quels. */
+  const analyser = reglages.rogner || reglages.contenu !== 'tout';
   const parPage = new Map();
-  for (const im of gardees) {
-    const rang = (parPage.get(im.page) || 0) + 1;
-    parPage.set(im.page, rang);
-    im.nom = `page ${deux(im.page)} - ${deux(rang)}`;
+  const sorties = [];
 
-    if (reglages.format !== 'png' && jpegIntact(im.flux)) {
-      im.blob = new Blob([im.flux.contents], { type: 'image/jpeg' });
-      im.nom += '.jpg';
-      im.intacte = true;
-    } else {
-      aDessiner.push(im);
-    }
-  }
-  avancer(0.1);
+  await parcourirImages(src, gardees, reglages, analyser, (p) => avancer(0.05 + p * 0.95),
+    async (im, toile) => {
+      const res = toile
+        ? await finaliser(toile, reglages, im.intacte ? im.flux.contents : null)
+        : { blob: new Blob([im.flux.contents], { type: 'image/jpeg' }),
+            largeur: im.largeur, hauteur: im.hauteur, ext: 'jpg', intacte: true };
+      if (res.ecartee) { ecarter(piece, res.ecartee); return; }
 
-  if (aDessiner.length) {
-    await dessiner(src, aDessiner, reglages.format === 'jpg' ? 'jpg' : 'png',
-                   (p) => avancer(0.1 + p * 0.9));
-  }
+      const rang = (parPage.get(im.page) || 0) + 1;
+      parPage.set(im.page, rang);
+      sorties.push({ ...res, nom: `page ${deux(im.page)} - ${deux(rang)}.${res.ext}` });
+    });
 
-  piece.images = gardees.filter((im) => im.blob).map((im) => ({
-    nom: im.nom, blob: im.blob, largeur: im.largeur, hauteur: im.hauteur,
-    intacte: !!im.intacte, url: URL.createObjectURL(im.blob),
-  }));
-  terminer(piece);
+  piece.images = sorties.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
 }
 
-function terminer(piece) {
-  piece.etat = 'fini';
-  piece.part = 1;
-  jrn.ecrire(`[${piece.fichier.name}] ${pluriel(piece.images.length, 'image')} · ` +
-             `${poids(poidsImages(piece))}` +
-             (piece.ecartees ? ` · ${piece.ecartees} trop petite(s) ou masque(s)` : ''));
+/**
+ * Pose chaque image sur une toile, à sa taille réelle, puis appelle `traiter`.
+ *
+ * Les JPEG lisibles tels quels sont décodés par le navigateur. Les autres
+ * (Flate, JBIG2, CCITT, JPEG 2000, CMJN, masques de transparence) ne sont
+ * pas des fichiers images en l'état. Plutôt que de réécrire tous ces
+ * décodeurs, on fabrique un petit PDF où chaque image occupe seule une page
+ * à sa taille exacte (1 point = 1 pixel), et pdf.js la dessine : couleurs,
+ * transparence et formats exotiques sont gérés comme à l'affichage.
+ */
+async function parcourirImages(src, images, reglages, analyser, surAvancement, traiter) {
+  const { PDFDocument, PDFName, PDFObjectCopier,
+          pushGraphicsState, popGraphicsState,
+          concatTransformationMatrix, drawObject } = window.PDFLib;
+
+  const aDessiner = images.filter((im) => !im.intacte);
+  let doc = null;
+  if (aDessiner.length) {
+    const mini = await PDFDocument.create();
+    const copieur = PDFObjectCopier.for(src.context, mini.context);
+    for (const im of aDessiner) {
+      const ref = mini.context.register(copieur.copy(im.flux));
+      const page = mini.addPage([im.largeur, im.hauteur]);
+      page.node.setXObject(PDFName.of('Im0'), ref);
+      page.pushOperators(
+        pushGraphicsState(),
+        concatTransformationMatrix(im.largeur, 0, 0, im.hauteur, 0, 0),
+        drawObject('Im0'),
+        popGraphicsState(),
+      );
+      im.pageMini = mini.getPageCount();
+    }
+    doc = await window.pdfjsLib.getDocument({ data: await mini.save() }).promise;
+  }
+
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d', { willReadFrequently: true });
+
+  try {
+    for (let i = 0; i < images.length; i++) {
+      const im = images[i];
+
+      if (im.intacte && !analyser) {
+        await traiter(im, null);
+      } else if (im.intacte) {
+        const bitmap = await createImageBitmap(new Blob([im.flux.contents], { type: 'image/jpeg' }));
+        toile.width = bitmap.width;
+        toile.height = bitmap.height;
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        await traiter(im, toile);
+      } else {
+        const page = await doc.getPage(im.pageMini);
+        const bride = Math.min(1, COTE_MAX / im.largeur, COTE_MAX / im.hauteur,
+                               Math.sqrt(SURFACE_MAX / (im.largeur * im.hauteur)));
+        if (bride < 1) {
+          jrn.ecrire(`page ${im.page} : image de ${im.largeur}×${im.hauteur}, trop grande ` +
+                     `pour l'onglet — réduite à ${Math.round(bride * 100)} %`);
+        }
+        const vue = page.getViewport({ scale: bride });
+        toile.width = Math.max(1, Math.round(vue.width));
+        toile.height = Math.max(1, Math.round(vue.height));
+        ctx.clearRect(0, 0, toile.width, toile.height);
+        // Fond transparent : pdf.js ne peint pas de blanc, la transparence
+        // éventuelle de l'image est gardée. « print » : le mode affichage
+        // dépend de requestAnimationFrame, figé en arrière-plan (voir Presse).
+        await page.render({
+          canvasContext: ctx, viewport: vue, intent: 'print',
+          background: 'rgba(0,0,0,0)',
+        }).promise;
+        page.cleanup();
+        await traiter(im, toile);
+      }
+
+      surAvancement((i + 1) / images.length);
+      await respirer();
+    }
+  } finally {
+    doc?.destroy();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Rogner, juger, encoder                                              */
+/* ------------------------------------------------------------------ */
+/**
+ * Dernière étape commune aux PDF et aux PSD : retire les bords vides,
+ * écarte ce qui n'est pas une photo, puis encode.
+ *
+ * @param {HTMLCanvasElement} toile  l'image, à sa taille réelle
+ * @param {Uint8Array|null} jpeg     les octets d'origine, si c'est un JPEG
+ *                                   qui peut sortir intact
+ * @returns {Promise<{blob,largeur,hauteur,ext,intacte}|{ecartee:string}>}
+ */
+async function finaliser(toile, reglages, jpeg = null) {
+  const ctx = toile.getContext('2d', { willReadFrequently: true });
+  const l = toile.width;
+  const h = toile.height;
+  const pixels = ctx.getImageData(0, 0, l, h).data;
+
+  const fond = reconnaitreFond(pixels, l, h);
+  let cadre = { x: 0, y: 0, l, h };
+  if (reglages.rogner && fond) {
+    cadre = cadrer(pixels, l, h, fond);
+    if (!cadre) return { ecartee: 'vide' };
+  }
+  if (cadre.l < reglages.min || cadre.h < reglages.min) return { ecartee: 'petite' };
+
+  if (reglages.contenu !== 'tout') {
+    const nature = juger(pixels, l, cadre, fond);
+    if (nature === 'vide') return { ecartee: 'vide' };
+    if (nature === 'forme') return { ecartee: 'forme' };
+    if (nature === 'logo' && reglages.contenu === 'photos') return { ecartee: 'logo' };
+  }
+
+  const entiere = cadre.l === l && cadre.h === h;
+  if (jpeg && entiere && reglages.format !== 'png') {
+    return { blob: new Blob([jpeg], { type: 'image/jpeg' }),
+             largeur: l, hauteur: h, ext: 'jpg', intacte: true };
+  }
+
+  const enJpg = reglages.format === 'jpg' || (reglages.format === 'origine' && jpeg);
+  const sortie = document.createElement('canvas');
+  sortie.width = cadre.l;
+  sortie.height = cadre.h;
+  const cs = sortie.getContext('2d');
+  if (enJpg) {
+    // Le JPEG ne connaît pas la transparence : sans fond blanc, elle noircit.
+    cs.fillStyle = '#FFFFFF';
+    cs.fillRect(0, 0, cadre.l, cadre.h);
+  }
+  cs.drawImage(toile, cadre.x, cadre.y, cadre.l, cadre.h, 0, 0, cadre.l, cadre.h);
+  const blob = await new Promise((r) =>
+    sortie.toBlob(r, enJpg ? 'image/jpeg' : 'image/png', enJpg ? 0.93 : undefined));
+  if (!blob) return { ecartee: 'vide' };
+  return { blob, largeur: cadre.l, hauteur: cadre.h, ext: enJpg ? 'jpg' : 'png', intacte: false };
+}
+
+/** Écart toléré entre deux teintes « pareilles » : le JPEG bave un peu. */
+const TOLERANCE = 26;
+
+/**
+ * Le fond, s'il y en a un : transparent, ou une couleur unie que partagent
+ * les quatre coins. Sinon l'image va jusqu'au bord, il n'y a rien à rogner.
+ */
+function reconnaitreFond(d, l, h) {
+  const coins = [0, (l - 1) * 4, (h - 1) * l * 4, ((h - 1) * l + l - 1) * 4];
+  if (coins.every((i) => d[i + 3] < 16)) return { transparent: true };
+  const [r, v, b] = [d[0], d[1], d[2]];
+  const pareil = (i) => d[i + 3] > 240 && Math.abs(d[i] - r) <= TOLERANCE &&
+    Math.abs(d[i + 1] - v) <= TOLERANCE && Math.abs(d[i + 2] - b) <= TOLERANCE;
+  return coins.every(pareil) ? { r, v, b } : null;
+}
+
+function estFond(d, i, fond) {
+  if (d[i + 3] < 16) return true;
+  if (fond.transparent) return false;
+  return d[i + 3] > 240 && Math.abs(d[i] - fond.r) <= TOLERANCE &&
+    Math.abs(d[i + 1] - fond.v) <= TOLERANCE && Math.abs(d[i + 2] - fond.b) <= TOLERANCE;
+}
+
+/** Le plus petit rectangle qui contient tout ce qui n'est pas du fond. */
+function cadrer(d, l, h, fond) {
+  let x0 = l, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    let i = y * l * 4;
+    for (let x = 0; x < l; x++, i += 4) {
+      if (estFond(d, i, fond)) continue;
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      y1 = y;
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, l: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/**
+ * Photo, logo ou simple forme ? On compte les teintes sur un échantillon
+ * de pixels (le fond exclu).
+ *  · une forme, une ombre : une seule teinte domine ;
+ *  · un logo, un texte coloré : une poignée de teintes couvre presque tout ;
+ *  · une photo : des milliers de nuances, aucune ne domine.
+ */
+function juger(d, l, cadre, fond) {
+  const pas = Math.max(1, Math.floor(Math.sqrt((cadre.l * cadre.h) / 60000)));
+  const grosses = new Uint32Array(512);       // 3 bits par couche
+  const fines = new Uint32Array(4096);        // 4 bits par couche
+  let n = 0, somme = 0, carres = 0, total = 0;
+  for (let y = cadre.y; y < cadre.y + cadre.h; y += pas) {
+    for (let x = cadre.x; x < cadre.x + cadre.l; x += pas) {
+      const i = (y * l + x) * 4;
+      total++;
+      if (d[i + 3] < 128 || (fond && estFond(d, i, fond))) continue;
+      grosses[((d[i] >> 5) << 6) | ((d[i + 1] >> 5) << 3) | (d[i + 2] >> 5)]++;
+      fines[((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4)]++;
+      const lum = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+      somme += lum;
+      carres += lum * lum;
+      n++;
+    }
+  }
+  if (n < 50) return 'vide';
+  // Presque tout est couleur de fond : un panneau clair avec un pictogramme
+  // dans un coin, pas une photo. (Une photo détourée garde bien plus de
+  // matière dans son cadre.)
+  if (n / total < 0.15) return 'forme';
+  if (Math.max(...grosses) / n >= 0.85) return 'forme';
+  // Un dégradé doux a beaucoup de nuances mais presque aucun contraste :
+  // c'est un fond, pas une photo.
+  const moyenne = somme / n;
+  // (Mesuré sur de vrais flyers : un fond gris à 15, une photo à 60 et plus.)
+  if (Math.sqrt(Math.max(0, carres / n - moyenne * moyenne)) < 22) return 'forme';
+  const tri = [...fines].sort((a, b) => b - a);
+  let couvert = 0;
+  for (let k = 0; k < 12; k++) couvert += tri[k];
+  return couvert / n >= 0.85 ? 'logo' : 'photo';
+}
+
+/* ------------------------------------------------------------------ */
+/* PSD : les calques, un par un                                        */
+/* ------------------------------------------------------------------ */
+/**
+ * Dans un fichier Photoshop, chaque photo est un calque à part, avec sa
+ * transparence et son masque : c'est la meilleure source possible. Les
+ * calques de texte, les aplats et les réglages n'ont pas de pixels à eux,
+ * on ne les regarde même pas.
+ */
+async function extrairePsd(piece, tampon, reglages, avancer) {
+  let psd;
+  try {
+    psd = ouvrirPsd(tampon);
+  } catch (e) {
+    throw new Error(e.message || 'Fichier Photoshop illisible.');
+  }
+  const calques = psd.calques.filter((c) => c.genre !== 'groupe');
+  piece.nbCalques = calques.length;
+  jrn.ecrire(`[${piece.fichier.name}] ${psd.largeur}×${psd.hauteur} · ${psd.mode} · ` +
+             `${pluriel(calques.length, 'calque')}`);
+
+  // Photoshop range les calques du bas vers le haut : on les rend dans
+  // l'ordre du panneau, celui du haut d'abord.
+  const candidats = [];
+  for (const c of [...calques].reverse()) {
+    // Un calque de réglage n'a rien à montrer seul ; textes et aplats ont des
+    // pixels, mais on ne les veut que si l'on a demandé « tout ».
+    const garder = c.genre === 'pixels' ||
+      (reglages.contenu === 'tout' && (c.genre === 'texte' || c.genre === 'remplissage'));
+    if (!garder) { ecarter(piece, c.genre); continue; }
+    if (!c.largeur || !c.hauteur) { ecarter(piece, 'vide'); continue; }
+    if (c.largeur < reglages.min || c.hauteur < reglages.min) { ecarter(piece, 'petite'); continue; }
+    candidats.push(c);
+  }
+
+  const toile = document.createElement('canvas');
+  const ctx = toile.getContext('2d', { willReadFrequently: true });
+  const vues = new Set();
+  const sorties = [];
+
+  for (let i = 0; i < candidats.length; i++) {
+    const c = candidats[i];
+    try {
+      const image = await psd.decoder(c);
+      if (reglages.doublons) {
+        const empreinte = `${image.width}x${image.height}:${hacher(echantillon(image.data))}`;
+        if (vues.has(empreinte)) { avancer((i + 1) / candidats.length); continue; }
+        vues.add(empreinte);
+      }
+      toile.width = image.width;
+      toile.height = image.height;
+      ctx.putImageData(image, 0, 0);
+
+      const res = await finaliser(toile, reglages);
+      if (res.ecartee) ecarter(piece, res.ecartee);
+      else {
+        const nom = nomPropre(c.nom, 'calque').slice(0, 60);
+        sorties.push({ ...res, nom: `${deux(sorties.length + 1)} - ${nom}.${res.ext}` });
+      }
+    } catch (e) {
+      jrn.ecrire(`[${piece.fichier.name}] calque « ${c.nom} » illisible — ${e.message}`);
+    }
+    avancer((i + 1) / candidats.length);
+    await respirer();
+  }
+
+  piece.images = sorties.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
+}
+
+/** Un pixel sur mille et quelques suffit pour reconnaître deux images identiques. */
+function echantillon(d) {
+  const pas = 16 * 4 * 97;
+  const sortie = new Uint8Array(Math.ceil(d.length / pas) * 4);
+  for (let i = 0, j = 0; i < d.length; i += pas, j += 4) sortie.set(d.subarray(i, i + 4), j);
+  return sortie;
 }
 
 /* ------------------------------------------------------------------ */
@@ -556,94 +963,6 @@ function hacher(octets) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Redessiner les images qui ne peuvent pas sortir telles quelles      */
-/* ------------------------------------------------------------------ */
-/* Un onglet plafonne la taille d'un canevas : au-delà, il rend du vide. */
-const COTE_MAX = 16000;
-const SURFACE_MAX = 60e6;
-
-/**
- * Les images compressées autrement qu'en JPEG (Flate, JBIG2, CCITT,
- * JPEG 2000…) ou accompagnées d'un masque de transparence ne sont pas des
- * fichiers lisibles en l'état. Plutôt que de réécrire tous ces décodeurs,
- * on fabrique un petit PDF où chaque image occupe seule une page à sa
- * taille exacte (1 point = 1 pixel), et pdf.js la dessine : les couleurs,
- * la transparence et les formats exotiques sont gérés comme à l'affichage.
- */
-async function dessiner(src, images, format, surAvancement) {
-  const { PDFDocument, PDFName, PDFObjectCopier,
-          pushGraphicsState, popGraphicsState,
-          concatTransformationMatrix, drawObject } = window.PDFLib;
-
-  const mini = await PDFDocument.create();
-  const copieur = PDFObjectCopier.for(src.context, mini.context);
-  for (const im of images) {
-    const ref = mini.context.register(copieur.copy(im.flux));
-    const page = mini.addPage([im.largeur, im.hauteur]);
-    page.node.setXObject(PDFName.of('Im0'), ref);
-    page.pushOperators(
-      pushGraphicsState(),
-      concatTransformationMatrix(im.largeur, 0, 0, im.hauteur, 0, 0),
-      drawObject('Im0'),
-      popGraphicsState(),
-    );
-  }
-
-  const doc = await window.pdfjsLib.getDocument({ data: await mini.save() }).promise;
-  const toile = document.createElement('canvas');
-  const ctx = toile.getContext('2d');
-
-  try {
-    for (let i = 0; i < images.length; i++) {
-      const im = images[i];
-      const page = await doc.getPage(i + 1);
-
-      const bride = Math.min(1, COTE_MAX / im.largeur, COTE_MAX / im.hauteur,
-                             Math.sqrt(SURFACE_MAX / (im.largeur * im.hauteur)));
-      if (bride < 1) {
-        jrn.ecrire(`${im.nom} : ${im.largeur}×${im.hauteur} dépasse ce que l'onglet ` +
-                   `peut dessiner — réduite à ${Math.round(bride * 100)} %`);
-      }
-      const vue = page.getViewport({ scale: bride });
-      toile.width = Math.max(1, Math.round(vue.width));
-      toile.height = Math.max(1, Math.round(vue.height));
-      ctx.clearRect(0, 0, toile.width, toile.height);
-
-      // Le JPEG ne connaît pas la transparence : sans fond blanc, elle noircit.
-      // En PNG, on la garde : fond transparent, pdf.js ne peint pas de blanc.
-      if (format === 'jpg') {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, toile.width, toile.height);
-      }
-
-      // « print » : le mode affichage dépend de requestAnimationFrame, qui se
-      // fige dans un onglet en arrière-plan (voir Presse).
-      await page.render({
-        canvasContext: ctx, viewport: vue, intent: 'print',
-        background: 'rgba(0,0,0,0)',
-      }).promise;
-      page.cleanup();
-
-      const blob = await new Promise((r) =>
-        toile.toBlob(r, format === 'jpg' ? 'image/jpeg' : 'image/png', 0.92));
-      if (blob) {
-        im.blob = blob;
-        im.nom += format === 'jpg' ? '.jpg' : '.png';
-        im.largeur = toile.width;
-        im.hauteur = toile.height;
-      } else {
-        jrn.ecrire(`${im.nom} : encodage impossible — ignorée`);
-      }
-
-      surAvancement((i + 1) / images.length);
-      await new Promise((r) => setTimeout(r, 0));
-    }
-  } finally {
-    doc.destroy();
-  }
-}
-
-/* ------------------------------------------------------------------ */
 /* Mode de secours : PDF protégé, lu par pdf.js seul                   */
 /* ------------------------------------------------------------------ */
 /**
@@ -655,11 +974,10 @@ async function extraireSecours(piece, octets, reglages, surAvancement) {
   const { OPS } = window.pdfjsLib;
   const doc = await window.pdfjsLib.getDocument({ data: octets }).promise;
   piece.nbPages = doc.numPages;
-  const format = reglages.format === 'jpg' ? 'jpg' : 'png';
   const vues = new Set();
-  const images = [];
+  const sorties = [];
   const toile = document.createElement('canvas');
-  const ctx = toile.getContext('2d');
+  const ctx = toile.getContext('2d', { willReadFrequently: true });
 
   const objet = (page, nom) => new Promise((r) => {
     const reserve = nom.startsWith('g_') ? page.commonObjs : page.objs;
@@ -681,38 +999,34 @@ async function extraireSecours(piece, octets, reglages, surAvancement) {
       for (const nom of noms) {
         const im = await objet(page, nom);
         if (!im || !im.width) continue;
-        if (im.width < reglages.min || im.height < reglages.min) { piece.ecartees++; continue; }
+        if (im.width < reglages.min || im.height < reglages.min) { ecarter(piece, 'petite'); continue; }
 
         toile.width = im.width;
         toile.height = im.height;
         ctx.clearRect(0, 0, im.width, im.height);
-        if (format === 'jpg') { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, im.width, im.height); }
         if (im.bitmap) ctx.drawImage(im.bitmap, 0, 0);
         else ctx.putImageData(versRGBA(im), 0, 0);
 
         if (reglages.doublons) {
-          const echantillon = ctx.getImageData(0, 0, Math.min(64, im.width), Math.min(64, im.height)).data;
-          const empreinte = `${im.width}x${im.height}:${hacher(echantillon)}`;
+          const empreinte = `${im.width}x${im.height}:` +
+            hacher(echantillon(ctx.getImageData(0, 0, im.width, im.height).data));
           if (vues.has(empreinte)) continue;
           vues.add(empreinte);
         }
 
-        const blob = await new Promise((r) =>
-          toile.toBlob(r, format === 'jpg' ? 'image/jpeg' : 'image/png', 0.92));
-        if (!blob) continue;
+        const res = await finaliser(toile, reglages);
+        if (res.ecartee) { ecarter(piece, res.ecartee); continue; }
         rang++;
-        const nomFichier = `page ${deux(n)} - ${deux(rang)}.${format}`;
-        images.push({ nom: nomFichier, blob, largeur: im.width, hauteur: im.height,
-                      intacte: false, url: URL.createObjectURL(blob) });
+        sorties.push({ ...res, nom: `page ${deux(n)} - ${deux(rang)}.${res.ext}` });
       }
       page.cleanup();
       surAvancement(n / doc.numPages);
-      await new Promise((r) => setTimeout(r, 0));
+      await respirer();
     }
   } finally {
     doc.destroy();
   }
-  piece.images = images;
+  piece.images = sorties.map((s) => ({ ...s, url: URL.createObjectURL(s.blob) }));
 }
 
 /** Les trois formes de pixels que pdf.js peut rendre, ramenées en RGBA. */
